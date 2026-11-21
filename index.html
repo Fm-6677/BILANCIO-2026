@@ -763,6 +763,28 @@
         }
 
         .cat-row.zero { opacity: .4; }
+        .cat-row .cat-actions { display: inline-flex; align-items: center; gap: 6px; }
+        .cat-row .btn-del { width: 22px; height: 22px; font-size: .66rem; }
+        .cat-tag {
+            font-size: .58rem;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            color: var(--muted);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 1px 6px;
+            margin-left: 6px;
+        }
+
+        .cat-add {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .cat-add .field.emoji { flex: 0 0 90px; min-width: 90px; }
+        .cat-add .field.nome { flex: 2; min-width: 180px; }
+        .cat-add .btn-add-cat { flex: 0 0 auto; padding: 13px 20px; }
         .cat-row .num { font-variant-numeric: tabular-nums; font-weight: 500; white-space: nowrap; }
 
         @media(max-width:640px) {
@@ -907,6 +929,26 @@
             <div class="card-head">
                 <h2><span class="ico">🗂</span> Categorie <span class="badge-year" id="annoCategorie"></span></h2>
             </div>
+            <div class="cat-add">
+                <div class="row">
+                    <div class="field">
+                        <label for="nuovaCatTipo">Tipo categoria</label>
+                        <select id="nuovaCatTipo">
+                            <option value="spesa">🔥 Spesa</option>
+                            <option value="entrata">🌿 Entrata</option>
+                        </select>
+                    </div>
+                    <div class="field emoji">
+                        <label for="nuovaCatEmoji">Icona</label>
+                        <input type="text" id="nuovaCatEmoji" placeholder="🏷️" maxlength="4" autocomplete="off">
+                    </div>
+                    <div class="field nome">
+                        <label for="nuovaCatNome">Nome nuova categoria</label>
+                        <input type="text" id="nuovaCatNome" placeholder="Es. Abbonamenti, Freelance..." maxlength="40" autocomplete="off">
+                    </div>
+                    <button class="btn-ghost btn-add-cat" id="btnAggiungiCat">+ Aggiungi categoria</button>
+                </div>
+            </div>
             <div class="cat-groups" id="catGroups"></div>
         </div>
 
@@ -1038,6 +1080,77 @@
                 ]
             };
 
+            var CAT_STORAGE_KEY = "bilancio_categorie_custom_v1";
+            var categorieCustom = { entrata: [], spesa: [] };
+
+            function caricaCategorieCustom() {
+                try {
+                    var raw = localStorage.getItem(CAT_STORAGE_KEY);
+                    var obj = raw ? JSON.parse(raw) : null;
+                    categorieCustom = { entrata: [], spesa: [] };
+                    if (obj && typeof obj === "object") {
+                        ["entrata", "spesa"].forEach(function (t) {
+                            if (Array.isArray(obj[t])) {
+                                categorieCustom[t] = obj[t].filter(function (c) { return c && typeof c.value === "string" && c.value; });
+                            }
+                        });
+                    }
+                } catch (e) { categorieCustom = { entrata: [], spesa: [] }; }
+            }
+            function salvaCategorieCustom() {
+                try { localStorage.setItem(CAT_STORAGE_KEY, JSON.stringify(categorieCustom)); }
+                catch (e) { mostraToast("Impossibile salvare la categoria", true); }
+            }
+            // Restituisce le categorie predefinite + quelle personalizzate (con label già sicura per HTML)
+            function categorieDi(tipo) {
+                var base = (CATEGORIE[tipo] || []).map(function (c) {
+                    return { value: c.value, label: c.label, custom: false };
+                });
+                var extra = (categorieCustom[tipo] || []).map(function (c) {
+                    return { value: c.value, label: escapeHtml((c.emoji ? c.emoji + " " : "🏷️ ") + c.value), custom: true };
+                });
+                return base.concat(extra);
+            }
+
+            function aggiungiCategoria() {
+                var tipo = document.getElementById("nuovaCatTipo").value;
+                var nomeEl = document.getElementById("nuovaCatNome");
+                var emojiEl = document.getElementById("nuovaCatEmoji");
+                var nome = nomeEl.value.trim().replace(/\s+/g, " ");
+                var emoji = emojiEl.value.trim();
+                if (!categorieCustom[tipo]) return;
+                if (!nome) { return mostraToast("Inserisci il nome della categoria", true); }
+                var esiste = categorieDi(tipo).some(function (c) { return c.value.toLowerCase() === nome.toLowerCase(); });
+                if (esiste) { return mostraToast("Categoria già esistente", true); }
+                categorieCustom[tipo].push({ value: nome, emoji: emoji });
+                salvaCategorieCustom();
+                nomeEl.value = "";
+                emojiEl.value = "";
+                if (document.getElementById("tipo").value === tipo) {
+                    aggiornaCategorie();
+                    document.getElementById("categoria").value = nome;
+                }
+                renderCategorie();
+                mostraToast("Categoria aggiunta ✓");
+            }
+
+            function eliminaCategoria(tipo, nome) {
+                if (!categorieCustom[tipo]) return;
+                var usata = tuttiMovimenti.some(function (m) { return m.tipo === tipo && m.categoria === nome; });
+                var msg = usata
+                    ? "La categoria \"" + nome + "\" è usata da alcuni movimenti, che resteranno invariati. Eliminarla dall'elenco?"
+                    : "Eliminare la categoria \"" + nome + "\"?";
+                if (!confirm(msg)) return;
+                categorieCustom[tipo] = categorieCustom[tipo].filter(function (c) { return c.value !== nome; });
+                salvaCategorieCustom();
+                var sel = document.getElementById("categoria");
+                var selezionata = sel.value;
+                aggiornaCategorie();
+                if (selezionata !== nome) sel.value = selezionata;
+                renderCategorie();
+                mostraToast("Categoria eliminata");
+            }
+
             var PAGAMENTI_LEGACY = { "Carta Credito": "Carta di Credito", "Carta debito": "Carta di Debito", "Paypal": "PayPal" };
 
             function carica() {
@@ -1107,7 +1220,7 @@
             function aggiornaCategorie() {
                 var tipo = document.getElementById("tipo").value;
                 var sel = document.getElementById("categoria");
-                var lista = CATEGORIE[tipo] || [];
+                var lista = categorieDi(tipo);
                 sel.innerHTML = '<option value="">— Seleziona —</option>' +
                     lista.map(function (c) {
                         return '<option value="' + escapeHtml(c.value) + '">' + c.label + '</option>';
@@ -1230,16 +1343,21 @@
                         tot[m.categoria] = (tot[m.categoria] || 0) + m.importo;
                         totale += m.importo;
                     });
-                    var righe = CATEGORIE[g.tipo].map(function (c) {
+                    var righe = categorieDi(g.tipo).map(function (c) {
                         var v = tot[c.value] || 0;
                         delete tot[c.value];
-                        return { label: c.label, v: v };
+                        return { label: c.label, v: v, custom: c.custom, value: c.value };
                     });
                     Object.keys(tot).forEach(function (k) { righe.push({ label: escapeHtml(k), v: tot[k] }); });
                     return '<div class="cat-group ' + g.cls + '">' +
                         '<h3><span>' + g.titolo + '</span><span class="' + g.col + '">' + fmt(totale) + '</span></h3>' +
                         righe.map(function (r) {
-                            return '<div class="cat-row' + (r.v ? '' : ' zero') + '"><span>' + r.label + '</span><span class="num">' + fmt(r.v) + '</span></div>';
+                            var del = r.custom
+                                ? '<button class="btn-del btn-del-cat" title="Elimina categoria" data-tipo="' + g.tipo + '" data-nome="' + escapeHtml(r.value) + '">✕</button>'
+                                : '';
+                            return '<div class="cat-row' + (r.v || r.custom ? '' : ' zero') + '"><span>' + r.label +
+                                (r.custom ? '<span class="cat-tag">mia</span>' : '') +
+                                '</span><span class="cat-actions"><span class="num">' + fmt(r.v) + '</span>' + del + '</span></div>';
                         }).join("") +
                         '</div>';
                 }).join("");
@@ -1385,6 +1503,14 @@
             selAnno.addEventListener("change", function (e) { cambiaAnno(e.target.value); });
             document.getElementById("tipo").addEventListener("change", aggiornaCategorie);
             document.getElementById("btnAggiungi").addEventListener("click", aggiungi);
+            document.getElementById("btnAggiungiCat").addEventListener("click", aggiungiCategoria);
+            document.getElementById("nuovaCatNome").addEventListener("keypress", function (ev) {
+                if (ev.key === "Enter") aggiungiCategoria();
+            });
+            document.getElementById("catGroups").addEventListener("click", function (ev) {
+                var btn = ev.target.closest(".btn-del-cat");
+                if (btn) eliminaCategoria(btn.getAttribute("data-tipo"), btn.getAttribute("data-nome"));
+            });
             document.getElementById("btnExport").addEventListener("click", esportaAnnoCorrente);
             document.getElementById("btnExportTutti").addEventListener("click", esportaTutti);
             document.getElementById("btnReset").addEventListener("click", azzeraAnno);
@@ -1394,6 +1520,7 @@
             });
 
             carica();
+            caricaCategorieCustom();
             aggiornaCategorie();
             var annoOggi = new Date().getFullYear();
             if (annoOggi >= ANNO_INIZIO && annoOggi <= ANNO_FINE) {

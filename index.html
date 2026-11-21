@@ -1094,6 +1094,10 @@
                     <input type="number" id="movDlgImporto" step="0.01" min="0" placeholder="0,00" inputmode="decimal" required>
                 </div>
                 <div class="field">
+                    <label for="movDlgPagamento">Metodo di pagamento</label>
+                    <select id="movDlgPagamento" required></select>
+                </div>
+                <div class="field">
                     <label for="movDlgDescrizione">Descrizione · opzionale</label>
                     <input type="text" id="movDlgDescrizione" placeholder="Note..." autocomplete="off">
                 </div>
@@ -1560,6 +1564,14 @@
                 document.getElementById("movDlgData").value = m.data;
                 document.getElementById("movDlgImporto").value = m.importo;
                 document.getElementById("movDlgDescrizione").value = m.descrizione || "";
+                var selPag = document.getElementById("movDlgPagamento");
+                selPag.innerHTML = document.getElementById("pagamento").innerHTML;
+                if (m.pagamento && !Array.prototype.some.call(selPag.options, function (o) { return o.value === m.pagamento; })) {
+                    var opt = document.createElement("option");
+                    opt.value = m.pagamento; opt.textContent = m.pagamento;
+                    selPag.appendChild(opt);
+                }
+                selPag.value = m.pagamento || "";
                 var dlg = document.getElementById("movDialog");
                 if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
                 document.getElementById("movDlgData").focus();
@@ -1575,13 +1587,16 @@
                 var data = document.getElementById("movDlgData").value;
                 var importo = parseFloat(document.getElementById("movDlgImporto").value);
                 var descrizione = document.getElementById("movDlgDescrizione").value.trim();
+                var pagamento = document.getElementById("movDlgPagamento").value;
                 if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) { return mostraToast("Inserisci una data valida", true); }
                 var anno = parseInt(data.slice(0, 4), 10);
                 if (anno < ANNO_INIZIO || anno > ANNO_FINE) {
                     return mostraToast("La data deve essere tra il " + ANNO_INIZIO + " e il " + ANNO_FINE, true);
                 }
                 if (!importo || importo <= 0 || !isFinite(importo)) { return mostraToast("Importo non valido", true); }
+                if (!pagamento) { return mostraToast("Seleziona un metodo di pagamento", true); }
                 m.data = data;
+                m.pagamento = pagamento;
                 m.importo = Math.round(importo * 100) / 100;
                 m.descrizione = descrizione;
                 salva();
@@ -1632,7 +1647,7 @@
                         '<td><span class="pay-badge">' + escapeHtml(m.pagamento || "—") + '</span></td>' +
                         '<td class="num ' + coloreTipo(m.tipo) + '">' + segnoTipo(m.tipo) + ' ' + fmt(m.importo) + '</td>' +
                         '<td class="mov-actions">' +
-                        '<button class="btn-del btn-edit-mov" data-id="' + m.id + '" title="Modifica data, importo e descrizione" aria-label="Modifica movimento">✎</button>' +
+                        '<button class="btn-del btn-edit-mov" data-id="' + m.id + '" title="Modifica data, importo, pagamento e descrizione" aria-label="Modifica movimento">✎</button>' +
                         '<button class="btn-del btn-del-mov" data-id="' + m.id + '" title="Elimina movimento" aria-label="Elimina movimento">✕</button>' +
                         '</td>' +
                         '</tr>';

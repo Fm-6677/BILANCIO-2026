@@ -795,6 +795,12 @@
         .cat-add .field.nome { flex: 2; min-width: 180px; }
         .cat-add .btn-add-cat { flex: 0 0 auto; padding: 13px 20px; }
         .cat-row .num { font-variant-numeric: tabular-nums; font-weight: 500; white-space: nowrap; }
+        .mov-actions { white-space: nowrap; text-align: right; }
+        .btn-del.btn-edit-mov:hover {
+            background: var(--green-light);
+            color: var(--green-2);
+            border-color: rgba(0, 0, 0, .08);
+        }
         .cat-row .btn-edit-cat:hover {
             background: var(--green-light);
             color: var(--green-2);
@@ -1071,6 +1077,29 @@
                 <div class="actions">
                     <button type="button" class="btn-ghost" id="catDlgAnnulla">Annulla</button>
                     <button type="submit" id="catDlgSalva">Salva</button>
+                </div>
+            </form>
+        </dialog>
+
+        <dialog class="cat-dialog" id="movDialog">
+            <form method="dialog" id="movDialogForm">
+                <h3><span class="preview">✎</span> Modifica movimento</h3>
+                <p class="hint" id="movDlgInfo"></p>
+                <div class="field">
+                    <label for="movDlgData">Data</label>
+                    <input type="date" id="movDlgData" min="2026-01-01" max="2046-12-31" required>
+                </div>
+                <div class="field">
+                    <label for="movDlgImporto">Importo</label>
+                    <input type="number" id="movDlgImporto" step="0.01" min="0" placeholder="0,00" inputmode="decimal" required>
+                </div>
+                <div class="field">
+                    <label for="movDlgDescrizione">Descrizione · opzionale</label>
+                    <input type="text" id="movDlgDescrizione" placeholder="Note..." autocomplete="off">
+                </div>
+                <div class="actions">
+                    <button type="button" class="btn-ghost" id="movDlgAnnulla">Annulla</button>
+                    <button type="submit">Salva modifiche</button>
                 </div>
             </form>
         </dialog>
@@ -1519,6 +1548,48 @@
                 mostraToast("Eliminato");
             }
 
+            /* ---------- Dialog: modifica movimento ---------- */
+            var movInModifica = null;
+            function apriModificaMovimento(id) {
+                var m = tuttiMovimenti.filter(function (x) { return x.id === id; })[0];
+                if (!m) return;
+                movInModifica = m;
+                var icona = iconaCategoria(m.tipo, m.categoria);
+                document.getElementById("movDlgInfo").textContent =
+                    labelTipo(m.tipo) + " · " + (icona ? icona + " " : "") + m.categoria + (m.pagamento ? " · " + m.pagamento : "");
+                document.getElementById("movDlgData").value = m.data;
+                document.getElementById("movDlgImporto").value = m.importo;
+                document.getElementById("movDlgDescrizione").value = m.descrizione || "";
+                var dlg = document.getElementById("movDialog");
+                if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
+                document.getElementById("movDlgData").focus();
+            }
+            function chiudiModificaMovimento() {
+                var dlg = document.getElementById("movDialog");
+                if (typeof dlg.close === "function") dlg.close(); else dlg.removeAttribute("open");
+                movInModifica = null;
+            }
+            function salvaModificaMovimento() {
+                var m = movInModifica;
+                if (!m) return;
+                var data = document.getElementById("movDlgData").value;
+                var importo = parseFloat(document.getElementById("movDlgImporto").value);
+                var descrizione = document.getElementById("movDlgDescrizione").value.trim();
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) { return mostraToast("Inserisci una data valida", true); }
+                var anno = parseInt(data.slice(0, 4), 10);
+                if (anno < ANNO_INIZIO || anno > ANNO_FINE) {
+                    return mostraToast("La data deve essere tra il " + ANNO_INIZIO + " e il " + ANNO_FINE, true);
+                }
+                if (!importo || importo <= 0 || !isFinite(importo)) { return mostraToast("Importo non valido", true); }
+                m.data = data;
+                m.importo = Math.round(importo * 100) / 100;
+                m.descrizione = descrizione;
+                salva();
+                chiudiModificaMovimento();
+                render();
+                mostraToast(anno !== annoCorrente ? "Movimento aggiornato e spostato nel " + anno + " ✓" : "Movimento aggiornato ✓");
+            }
+
             function azzeraAnno() {
                 var lista = movimentiAnno(annoCorrente);
                 if (!lista.length) {
@@ -1560,12 +1631,20 @@
                             : '<td class="desc desc-empty">—</td>') +
                         '<td><span class="pay-badge">' + escapeHtml(m.pagamento || "—") + '</span></td>' +
                         '<td class="num ' + coloreTipo(m.tipo) + '">' + segnoTipo(m.tipo) + ' ' + fmt(m.importo) + '</td>' +
-                        '<td style="text-align:right"><button class="btn-del" data-id="' + m.id + '">✕</button></td>' +
+                        '<td class="mov-actions">' +
+                        '<button class="btn-del btn-edit-mov" data-id="' + m.id + '" title="Modifica data, importo e descrizione" aria-label="Modifica movimento">✎</button>' +
+                        '<button class="btn-del btn-del-mov" data-id="' + m.id + '" title="Elimina movimento" aria-label="Elimina movimento">✕</button>' +
+                        '</td>' +
                         '</tr>';
                 }).join("");
-                body.querySelectorAll('.btn-del').forEach(function (btn) {
+                body.querySelectorAll('.btn-del-mov').forEach(function (btn) {
                     btn.addEventListener('click', function () {
                         elimina(parseFloat(btn.getAttribute('data-id')));
+                    });
+                });
+                body.querySelectorAll('.btn-edit-mov').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        apriModificaMovimento(parseFloat(btn.getAttribute('data-id')));
                     });
                 });
             }
@@ -1806,6 +1885,12 @@
             });
             document.getElementById("catDlgAnnulla").addEventListener("click", chiudiDialog);
             document.getElementById("catDialog").addEventListener("close", function () { dlgStato = null; });
+            document.getElementById("movDialogForm").addEventListener("submit", function (ev) {
+                ev.preventDefault();
+                salvaModificaMovimento();
+            });
+            document.getElementById("movDlgAnnulla").addEventListener("click", chiudiModificaMovimento);
+            document.getElementById("movDialog").addEventListener("close", function () { movInModifica = null; });
             document.getElementById("btnExport").addEventListener("click", esportaAnnoCorrente);
             document.getElementById("btnExportTutti").addEventListener("click", esportaTutti);
             document.getElementById("btnReset").addEventListener("click", azzeraAnno);

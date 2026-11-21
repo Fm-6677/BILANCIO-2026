@@ -689,6 +689,31 @@
         .filtri-info .tot b { font-weight: 500 }
         .filtri-info .spacer { flex: 1 }
         .filtri-info button[hidden] { display: none }
+
+        /* ============ TOTALI MOVIMENTI ============ */
+        #tabMov tfoot td {
+            background: var(--surface-2);
+            border-bottom: none;
+            padding-top: 10px;
+            padding-bottom: 10px;
+        }
+        #tabMov tfoot tr:first-child td { border-top: 2px solid var(--border) }
+        #tabMov tfoot td.tot-label {
+            text-align: right;
+            color: var(--muted);
+            font-size: .62rem;
+            text-transform: uppercase;
+            letter-spacing: .16em;
+            font-weight: 500;
+        }
+        #tabMov tfoot td.tot-label small {
+            text-transform: none;
+            letter-spacing: 0;
+            font-size: .72rem;
+            margin-left: 6px;
+        }
+        #tabMov tfoot tr.tot-saldo td { border-top: 1px solid var(--border) }
+        #tabMov tfoot tr.tot-saldo td.num { font-weight: 600 }
         @media(max-width:900px) {
             .filtri { grid-template-columns: repeat(2, 1fr) }
             .filtri .field.cerca { grid-column: 1 / -1 }
@@ -1188,6 +1213,7 @@
                         </tr>
                     </thead>
                     <tbody id="bodyMov"></tbody>
+                    <tfoot id="footMov"></tfoot>
                 </table>
             </div>
         </div>
@@ -1782,9 +1808,37 @@
                 if (s) tot.push('<span>Spese <b class="neg">' + fmt(s) + '</b></span>');
                 if (r) tot.push('<span>Risparmi <b class="sav">' + fmt(r) + '</b></span>');
                 info.innerHTML = '<span>' + conteggio + '</span>' +
-                    (filtriAttivi() && tot.length ? '<span class="tot">' + tot.join("") + '</span>' : "") +
+                    (tot.length ? '<span class="tot">' + tot.join("") + '</span>' : "") +
                     '<span class="spacer"></span>' +
                     '<button type="button" class="btn-ghost btn-sm" id="btnResetFiltri"' + (filtriAttivi() ? "" : " hidden") + '>✕ Azzera filtri</button>';
+            }
+
+            function renderTotaliTabella(lista) {
+                var foot = document.getElementById("footMov");
+                if (!lista.length) { foot.innerHTML = ""; return; }
+                var tot = { entrata: 0, spesa: 0, risparmio: 0 }, n = { entrata: 0, spesa: 0, risparmio: 0 };
+                lista.forEach(function (m) {
+                    var t = tot.hasOwnProperty(m.tipo) ? m.tipo : "risparmio";
+                    tot[t] += m.importo;
+                    n[t]++;
+                });
+                var etichette = { entrata: "Totale entrate", spesa: "Totale spese", risparmio: "Totale risparmi" };
+                var presenti = TIPI_CAT.filter(function (t) { return n[t] > 0; });
+                function riga(cls, label, conteggio, valore, colore) {
+                    return '<tr' + (cls ? ' class="' + cls + '"' : '') + '>' +
+                        '<td class="tot-label" colspan="5">' + label +
+                        (conteggio != null ? '<small>(' + conteggio + ')</small>' : '') + '</td>' +
+                        '<td class="num ' + colore + '">' + valore + '</td><td></td></tr>';
+                }
+                var html = presenti.map(function (t) {
+                    return riga("", etichette[t], n[t], segnoTipo(t) + " " + fmt(tot[t]), coloreTipo(t));
+                }).join("");
+                if (presenti.length > 1) {
+                    var saldo = tot.entrata - tot.spesa - tot.risparmio;
+                    html += riga("tot-saldo", filtriAttivi() ? "Saldo filtrato" : "Saldo", lista.length,
+                        (saldo < 0 ? "− " : "") + fmt(Math.abs(saldo)), saldo >= 0 ? "pos" : "neg");
+                }
+                foot.innerHTML = html;
             }
 
             function azzeraFiltri() {
@@ -1800,6 +1854,7 @@
                 aggiornaOpzioniFiltri(tuttiAnno);
                 var ord = tuttiAnno.filter(passaFiltri).sort(function (a, b) { return b.data.localeCompare(a.data); });
                 renderInfoFiltri(ord, tuttiAnno.length);
+                renderTotaliTabella(ord);
                 if (!tuttiAnno.length) {
                     body.innerHTML = '<tr><td colspan="7" class="empty">Nessun movimento nel ' + annoCorrente + '</td></tr>';
                     return;

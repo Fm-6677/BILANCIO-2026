@@ -735,6 +735,44 @@
             animation-delay: .22s
         }
 
+        .cat-groups {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 14px;
+        }
+
+        .cat-group {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 14px;
+        }
+
+        .cat-group h3 {
+            margin: 0 0 10px;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .cat-group.g h3 { color: var(--green-2); }
+        .cat-group.r h3 { color: var(--terra-2); }
+        .cat-group.p h3 { color: var(--sage); }
+
+        .cat-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 13px;
+            padding: 6px 0;
+            border-top: 1px dashed var(--border);
+            color: var(--text-2);
+        }
+
+        .cat-row.zero { opacity: .4; }
+        .cat-row .num { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+
         @media(max-width:640px) {
             body {
                 padding: 18px 12px 40px
@@ -820,9 +858,9 @@
                     <select id="pagamento">
                         <option value="">— Seleziona —</option>
                         <option value="Contanti">💵 Contanti</option>
-                        <option value="Carta Credito">💳 Carta Credito</option>
-                        <option value="Carta debito">💳 Carta debito</option>
-                        <option value="Paypal">🅿️ PayPal</option>
+                        <option value="Carta di Credito">💳 Carta di Credito</option>
+                        <option value="Carta di Debito">💳 Carta di Debito</option>
+                        <option value="PayPal">🅿️ PayPal</option>
                         <option value="Bonifico">🏦 Bonifico</option>
                     </select>
                 </div>
@@ -862,6 +900,13 @@
                     <div class="val" id="percRisparmio">0%</div>
                 </div>
             </div>
+        </div>
+
+        <div class="card">
+            <div class="card-head">
+                <h2><span class="ico">🗂</span> Categorie <span class="badge-year" id="annoCategorie"></span></h2>
+            </div>
+            <div class="cat-groups" id="catGroups"></div>
         </div>
 
         <div class="card">
@@ -980,7 +1025,6 @@
                     { value: "Trasporti", label: "🚗 Trasporti" },
                     { value: "Salute e benessere", label: "❤️ Salute e benessere" },
                     { value: "Tempo libero", label: "🎉 Tempo libero" },
-                    { value: "Risparmio e investimento", label: "💰 Risparmio e investimento" },
                     { value: "Altro (spese)", label: "📌 Altro" }
                 ],
                 risparmio: [
@@ -993,11 +1037,16 @@
                 ]
             };
 
+            var PAGAMENTI_LEGACY = { "Carta Credito": "Carta di Credito", "Carta debito": "Carta di Debito", "Paypal": "PayPal" };
+
             function carica() {
                 try {
                     var raw = localStorage.getItem(STORAGE_KEY);
                     tuttiMovimenti = raw ? JSON.parse(raw) : [];
                     if (!Array.isArray(tuttiMovimenti)) tuttiMovimenti = [];
+                    tuttiMovimenti.forEach(function (m) {
+                        if (m.pagamento && PAGAMENTI_LEGACY[m.pagamento]) m.pagamento = PAGAMENTI_LEGACY[m.pagamento];
+                    });
                 } catch (e) { tuttiMovimenti = []; }
             }
             function salva() {
@@ -1040,8 +1089,10 @@
                 document.getElementById("annoMov").textContent = annoCorrente;
                 document.getElementById("annoGrafico").textContent = annoCorrente;
                 document.getElementById("annoReport").textContent = annoCorrente;
+                document.getElementById("annoCategorie").textContent = annoCorrente;
                 var dataEl = document.getElementById("data");
-                var oggi = new Date().toISOString().slice(0, 10);
+                var d = new Date();
+                var oggi = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
                 if (oggi.indexOf(String(annoCorrente)) === 0) {
                     dataEl.value = oggi;
                 } else if (!dataEl.value || dataEl.value.indexOf(String(annoCorrente)) !== 0) {
@@ -1114,6 +1165,7 @@
             function render() {
                 renderTabella();
                 renderRiepilogo();
+                renderCategorie();
                 renderGrafico();
                 renderTabellaMesi();
                 renderConfrontoAnni();
@@ -1161,6 +1213,35 @@
                 el.textContent = fmt(saldo);
                 el.className = "val " + (saldo >= 0 ? "pos" : "neg");
                 document.getElementById("percRisparmio").textContent = fmtPerc(perc);
+            }
+
+            function renderCategorie() {
+                var lista = movimentiAnno(annoCorrente);
+                var gruppi = [
+                    { tipo: "entrata", titolo: "🌿 Entrate", cls: "g", col: "pos" },
+                    { tipo: "spesa", titolo: "🔥 Spese", cls: "r", col: "neg" },
+                    { tipo: "risparmio", titolo: "🌾 Risparmi", cls: "p", col: "sav" }
+                ];
+                document.getElementById("catGroups").innerHTML = gruppi.map(function (g) {
+                    var tot = {}, totale = 0;
+                    lista.forEach(function (m) {
+                        if (m.tipo !== g.tipo) return;
+                        tot[m.categoria] = (tot[m.categoria] || 0) + m.importo;
+                        totale += m.importo;
+                    });
+                    var righe = CATEGORIE[g.tipo].map(function (c) {
+                        var v = tot[c.value] || 0;
+                        delete tot[c.value];
+                        return { label: c.label, v: v };
+                    });
+                    Object.keys(tot).forEach(function (k) { righe.push({ label: escapeHtml(k), v: tot[k] }); });
+                    return '<div class="cat-group ' + g.cls + '">' +
+                        '<h3><span>' + g.titolo + '</span><span class="' + g.col + '">' + fmt(totale) + '</span></h3>' +
+                        righe.map(function (r) {
+                            return '<div class="cat-row' + (r.v ? '' : ' zero') + '"><span>' + r.label + '</span><span class="num">' + fmt(r.v) + '</span></div>';
+                        }).join("") +
+                        '</div>';
+                }).join("");
             }
 
             function calcolaMesi(lista) {

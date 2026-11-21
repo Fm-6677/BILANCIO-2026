@@ -665,6 +665,35 @@
             margin-bottom: 18px;
         }
 
+        /* ============ FILTRI MOVIMENTI ============ */
+        .filtri {
+            display: grid;
+            grid-template-columns: 2fr repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+        .filtri .field { min-width: 0; gap: 6px }
+        .filtri input,
+        .filtri select { padding: 10px 12px; font-size: 14px }
+        .filtri select { padding-right: 32px; background-position: right 12px center }
+        .filtri-info {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px 16px;
+            margin-bottom: 18px;
+            font-size: .8rem;
+            color: var(--muted);
+        }
+        .filtri-info .tot { display: flex; flex-wrap: wrap; gap: 6px 14px }
+        .filtri-info .tot b { font-weight: 500 }
+        .filtri-info .spacer { flex: 1 }
+        .filtri-info button[hidden] { display: none }
+        @media(max-width:900px) {
+            .filtri { grid-template-columns: repeat(2, 1fr) }
+            .filtri .field.cerca { grid-column: 1 / -1 }
+        }
+
         /* ============ TOAST ============ */
         .toast {
             position: fixed;
@@ -1117,6 +1146,34 @@
                 <button class="btn-ghost btn-sm" id="btnExportTutti">⬇ CSV completo</button>
                 <button class="btn-ghost btn-sm" id="btnReset">🗑 Azzera anno</button>
             </div>
+            <div class="filtri" id="filtriMov">
+                <div class="field cerca">
+                    <label for="filtroTesto">Cerca</label>
+                    <input type="search" id="filtroTesto" placeholder="Descrizione, categoria..." autocomplete="off">
+                </div>
+                <div class="field">
+                    <label for="filtroTipo">Tipo</label>
+                    <select id="filtroTipo">
+                        <option value="">Tutti</option>
+                        <option value="entrata">🌿 Entrate</option>
+                        <option value="spesa">🔥 Spese</option>
+                        <option value="risparmio">🌾 Risparmi</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="filtroCategoria">Categoria</label>
+                    <select id="filtroCategoria"><option value="">Tutte</option></select>
+                </div>
+                <div class="field">
+                    <label for="filtroMese">Mese</label>
+                    <select id="filtroMese"><option value="">Tutti</option></select>
+                </div>
+                <div class="field">
+                    <label for="filtroPagamento">Pagamento</label>
+                    <select id="filtroPagamento"><option value="">Tutti</option></select>
+                </div>
+            </div>
+            <div class="filtri-info" id="filtriInfo"></div>
             <div class="table-wrap">
                 <table id="tabMov">
                     <thead>
@@ -1628,11 +1685,127 @@
                 renderConfrontoAnni();
             }
 
+            // ===== Filtri movimenti =====
+            var MESI_ESTESI = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
+            var filtri = { testo: "", tipo: "", categoria: "", mese: "", pagamento: "" };
+
+            function filtriAttivi() {
+                return !!(filtri.testo || filtri.tipo || filtri.categoria || filtri.mese || filtri.pagamento);
+            }
+
+            function normalizza(v) {
+                return String(v || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            }
+
+            function passaFiltri(m) {
+                if (filtri.tipo && m.tipo !== filtri.tipo) return false;
+                if (filtri.categoria && (m.tipo + "|" + m.categoria) !== filtri.categoria) return false;
+                if (filtri.mese && m.data.slice(5, 7) !== filtri.mese) return false;
+                if (filtri.pagamento && (m.pagamento || "__nessuno__") !== filtri.pagamento) return false;
+                if (filtri.testo) {
+                    var q = normalizza(filtri.testo);
+                    var testo = normalizza([m.descrizione, m.categoria, m.pagamento, labelTipo(m.tipo), fmt(m.importo)].join(" "));
+                    if (testo.indexOf(q) === -1) return false;
+                }
+                return true;
+            }
+
+            function impostaOpzioni(sel, opzioniHtml, valore) {
+                sel.innerHTML = opzioniHtml;
+                var esiste = Array.prototype.some.call(sel.options, function (o) { return o.value === valore; });
+                sel.value = esiste ? valore : "";
+                return sel.value;
+            }
+
+            function aggiornaOpzioniFiltri(lista) {
+                // Categorie: quelle definite + quelle usate nei movimenti dell'anno, raggruppate per tipo
+                var tipi = filtri.tipo ? [filtri.tipo] : TIPI_CAT;
+                var gruppiHtml = tipi.map(function (t) {
+                    var nomi = categorieDi(t).map(function (c) { return { value: c.value, label: c.label }; });
+                    lista.forEach(function (m) {
+                        if (m.tipo === t && !nomi.some(function (n) { return n.value === m.categoria; })) {
+                            nomi.push({ value: m.categoria, label: escapeHtml(m.categoria) });
+                        }
+                    });
+                    var opts = nomi.map(function (n) {
+                        return '<option value="' + escapeHtml(t + "|" + n.value) + '">' + n.label + '</option>';
+                    }).join("");
+                    return filtri.tipo ? opts : '<optgroup label="' + labelTipo(t) + '">' + opts + '</optgroup>';
+                }).join("");
+                filtri.categoria = impostaOpzioni(document.getElementById("filtroCategoria"),
+                    '<option value="">Tutte</option>' + gruppiHtml, filtri.categoria);
+
+                // Mesi: tutti i 12 mesi, con il numero di movimenti
+                var conteggio = {};
+                lista.forEach(function (m) { var k = m.data.slice(5, 7); conteggio[k] = (conteggio[k] || 0) + 1; });
+                var mesiHtml = MESI_ESTESI.map(function (nome, i) {
+                    var k = String(i + 1).padStart(2, "0");
+                    return '<option value="' + k + '">' + nome + (conteggio[k] ? " (" + conteggio[k] + ")" : "") + '</option>';
+                }).join("");
+                filtri.mese = impostaOpzioni(document.getElementById("filtroMese"),
+                    '<option value="">Tutti</option>' + mesiHtml, filtri.mese);
+
+                // Pagamenti: metodi standard + quelli presenti nei movimenti
+                var pagamenti = [];
+                Array.prototype.forEach.call(document.getElementById("pagamento").options, function (o) {
+                    if (o.value) pagamenti.push({ value: o.value, label: o.textContent });
+                });
+                var senzaPag = false;
+                lista.forEach(function (m) {
+                    if (!m.pagamento) { senzaPag = true; return; }
+                    if (!pagamenti.some(function (p) { return p.value === m.pagamento; })) {
+                        pagamenti.push({ value: m.pagamento, label: m.pagamento });
+                    }
+                });
+                var pagHtml = pagamenti.map(function (p) {
+                    return '<option value="' + escapeHtml(p.value) + '">' + escapeHtml(p.label) + '</option>';
+                }).join("");
+                filtri.pagamento = impostaOpzioni(document.getElementById("filtroPagamento"),
+                    '<option value="">Tutti</option>' + pagHtml + (senzaPag ? '<option value="__nessuno__">— Non indicato</option>' : ""),
+                    filtri.pagamento);
+            }
+
+            function renderInfoFiltri(filtrati, totale) {
+                var info = document.getElementById("filtriInfo");
+                if (!totale) { info.innerHTML = ""; return; }
+                var e = 0, s = 0, r = 0;
+                filtrati.forEach(function (m) {
+                    if (m.tipo === "entrata") e += m.importo;
+                    else if (m.tipo === "spesa") s += m.importo;
+                    else r += m.importo;
+                });
+                var conteggio = filtriAttivi()
+                    ? filtrati.length + " di " + totale + " movimenti"
+                    : totale + (totale === 1 ? " movimento" : " movimenti");
+                var tot = [];
+                if (e) tot.push('<span>Entrate <b class="pos">' + fmt(e) + '</b></span>');
+                if (s) tot.push('<span>Spese <b class="neg">' + fmt(s) + '</b></span>');
+                if (r) tot.push('<span>Risparmi <b class="sav">' + fmt(r) + '</b></span>');
+                info.innerHTML = '<span>' + conteggio + '</span>' +
+                    (filtriAttivi() && tot.length ? '<span class="tot">' + tot.join("") + '</span>' : "") +
+                    '<span class="spacer"></span>' +
+                    '<button type="button" class="btn-ghost btn-sm" id="btnResetFiltri"' + (filtriAttivi() ? "" : " hidden") + '>✕ Azzera filtri</button>';
+            }
+
+            function azzeraFiltri() {
+                filtri = { testo: "", tipo: "", categoria: "", mese: "", pagamento: "" };
+                document.getElementById("filtroTesto").value = "";
+                document.getElementById("filtroTipo").value = "";
+                renderTabella();
+            }
+
             function renderTabella() {
                 var body = document.getElementById("bodyMov");
-                var ord = movimentiAnno(annoCorrente).slice().sort(function (a, b) { return b.data.localeCompare(a.data); });
-                if (!ord.length) {
+                var tuttiAnno = movimentiAnno(annoCorrente);
+                aggiornaOpzioniFiltri(tuttiAnno);
+                var ord = tuttiAnno.filter(passaFiltri).sort(function (a, b) { return b.data.localeCompare(a.data); });
+                renderInfoFiltri(ord, tuttiAnno.length);
+                if (!tuttiAnno.length) {
                     body.innerHTML = '<tr><td colspan="7" class="empty">Nessun movimento nel ' + annoCorrente + '</td></tr>';
+                    return;
+                }
+                if (!ord.length) {
+                    body.innerHTML = '<tr><td colspan="7" class="empty">Nessun movimento corrisponde ai filtri</td></tr>';
                     return;
                 }
                 body.innerHTML = ord.map(function (m) {
@@ -1909,6 +2082,23 @@
             document.getElementById("btnExport").addEventListener("click", esportaAnnoCorrente);
             document.getElementById("btnExportTutti").addEventListener("click", esportaTutti);
             document.getElementById("btnReset").addEventListener("click", azzeraAnno);
+            document.getElementById("filtroTesto").addEventListener("input", function (ev) {
+                filtri.testo = ev.target.value.trim();
+                renderTabella();
+            });
+            document.getElementById("filtroTipo").addEventListener("change", function (ev) {
+                filtri.tipo = ev.target.value;
+                renderTabella();
+            });
+            ["Categoria", "Mese", "Pagamento"].forEach(function (nome) {
+                document.getElementById("filtro" + nome).addEventListener("change", function (ev) {
+                    filtri[nome.toLowerCase()] = ev.target.value;
+                    renderTabella();
+                });
+            });
+            document.getElementById("filtriInfo").addEventListener("click", function (ev) {
+                if (ev.target.closest("#btnResetFiltri")) azzeraFiltri();
+            });
 
             document.getElementById("importo").addEventListener("keypress", function (ev) {
                 if (ev.key === "Enter") aggiungi();

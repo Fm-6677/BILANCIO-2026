@@ -548,6 +548,15 @@
             font-weight: 500
         }
 
+        td.desc {
+            max-width: 260px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        td.desc-empty { color: var(--muted) }
+
         .tipo-entrata { color: var(--green-2); font-weight: 500 }
         .tipo-spesa { color: var(--terra-2); font-weight: 500 }
         .tipo-risparmio { color: var(--sage-2); font-weight: 500 }
@@ -896,6 +905,21 @@
             td:nth-child(4) {
                 display: none
             }
+
+            /* Movimenti: su mobile mostra la descrizione e nasconde il pagamento */
+            #tabMov th:nth-child(4),
+            #tabMov td:nth-child(4) {
+                display: table-cell
+            }
+
+            #tabMov th:nth-child(5),
+            #tabMov td:nth-child(5) {
+                display: none
+            }
+
+            #tabMov td.desc {
+                max-width: 120px
+            }
         }
     </style>
 </head>
@@ -1061,12 +1085,13 @@
                 <button class="btn-ghost btn-sm" id="btnReset">🗑 Azzera anno</button>
             </div>
             <div class="table-wrap">
-                <table>
+                <table id="tabMov">
                     <thead>
                         <tr>
                             <th>Data</th>
                             <th>Tipo</th>
                             <th>Categoria</th>
+                            <th>Descrizione</th>
                             <th>Pagamento</th>
                             <th style="text-align:right">Importo</th>
                             <th></th>
@@ -1521,7 +1546,7 @@
                 var body = document.getElementById("bodyMov");
                 var ord = movimentiAnno(annoCorrente).slice().sort(function (a, b) { return b.data.localeCompare(a.data); });
                 if (!ord.length) {
-                    body.innerHTML = '<tr><td colspan="6" class="empty">Nessun movimento nel ' + annoCorrente + '</td></tr>';
+                    body.innerHTML = '<tr><td colspan="7" class="empty">Nessun movimento nel ' + annoCorrente + '</td></tr>';
                     return;
                 }
                 body.innerHTML = ord.map(function (m) {
@@ -1529,7 +1554,10 @@
                     return '<tr>' +
                         '<td>' + p[2] + '/' + p[1] + '/' + p[0] + '</td>' +
                         '<td class="' + classeTipo(m.tipo) + '">' + labelTipo(m.tipo).slice(0, 3) + '</td>' +
-                        '<td title="' + escapeHtml(m.descrizione || "") + '">' + escapeHtml((iconaCategoria(m.tipo, m.categoria) ? iconaCategoria(m.tipo, m.categoria) + " " : "") + m.categoria) + '</td>' +
+                        '<td>' + escapeHtml((iconaCategoria(m.tipo, m.categoria) ? iconaCategoria(m.tipo, m.categoria) + " " : "") + m.categoria) + '</td>' +
+                        (m.descrizione
+                            ? '<td class="desc" title="' + escapeHtml(m.descrizione) + '">' + escapeHtml(m.descrizione) + '</td>'
+                            : '<td class="desc desc-empty">—</td>') +
                         '<td><span class="pay-badge">' + escapeHtml(m.pagamento || "—") + '</span></td>' +
                         '<td class="num ' + coloreTipo(m.tipo) + '">' + segnoTipo(m.tipo) + ' ' + fmt(m.importo) + '</td>' +
                         '<td style="text-align:right"><button class="btn-del" data-id="' + m.id + '">✕</button></td>' +

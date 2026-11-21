@@ -786,6 +786,79 @@
         .cat-add .field.nome { flex: 2; min-width: 180px; }
         .cat-add .btn-add-cat { flex: 0 0 auto; padding: 13px 20px; }
         .cat-row .num { font-variant-numeric: tabular-nums; font-weight: 500; white-space: nowrap; }
+        .cat-row .btn-edit-cat:hover {
+            background: var(--green-light);
+            color: var(--green-2);
+            border-color: rgba(95, 111, 82, .25)
+        }
+
+        /* Pulsante scelta icona */
+        .icon-btn {
+            width: 100%;
+            height: 46px;
+            font-size: 1.35rem;
+            padding: 0;
+            letter-spacing: 0;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            display: grid;
+            place-items: center;
+        }
+        .icon-btn:hover { border-color: var(--green); background: var(--surface-2); }
+
+        /* Griglia icone */
+        .icon-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+            gap: 6px;
+            max-height: 220px;
+            overflow-y: auto;
+            padding: 2px;
+        }
+        .icon-grid button {
+            height: 40px;
+            padding: 0;
+            font-size: 1.25rem;
+            letter-spacing: 0;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            color: inherit;
+        }
+        .icon-grid button:hover { background: var(--surface-2); border-color: var(--border-strong); }
+        .icon-grid button.sel { background: var(--green-light); border-color: var(--green-2); box-shadow: 0 0 0 1px var(--green-2) inset; }
+
+        /* Dialog categorie */
+        .cat-dialog {
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--surface);
+            color: var(--text);
+            padding: 0;
+            width: min(460px, calc(100vw - 32px));
+            box-shadow: 0 30px 60px -24px rgba(47, 53, 41, .45);
+        }
+        .cat-dialog::backdrop { background: rgba(47, 53, 41, .35); }
+        .cat-dialog form { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+        .cat-dialog h3 {
+            margin: 0;
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .cat-dialog .preview { font-size: 1.6rem; }
+        .cat-dialog .hint { font-size: .72rem; color: var(--muted); margin: 0; }
+        .cat-dialog .dialog-sub { display: flex; gap: 10px; align-items: flex-end; }
+        .cat-dialog .dialog-sub .field { flex: 1; }
+        .cat-dialog .dialog-sub .field.emoji { flex: 0 0 96px; }
+        .cat-dialog .actions { display: flex; justify-content: flex-end; gap: 10px; }
+        .cat-dialog .actions button { padding: 12px 20px; }
 
         @media(max-width:640px) {
             body {
@@ -936,11 +1009,12 @@
                         <select id="nuovaCatTipo">
                             <option value="spesa">🔥 Spesa</option>
                             <option value="entrata">🌿 Entrata</option>
+                            <option value="risparmio">🌾 Risparmio</option>
                         </select>
                     </div>
                     <div class="field emoji">
-                        <label for="nuovaCatEmoji">Icona</label>
-                        <input type="text" id="nuovaCatEmoji" placeholder="🏷️" maxlength="4" autocomplete="off">
+                        <label for="nuovaCatIconaBtn">Icona</label>
+                        <button type="button" class="icon-btn" id="nuovaCatIconaBtn" title="Scegli icona">🏷️</button>
                     </div>
                     <div class="field nome">
                         <label for="nuovaCatNome">Nome nuova categoria</label>
@@ -951,6 +1025,31 @@
             </div>
             <div class="cat-groups" id="catGroups"></div>
         </div>
+
+        <dialog class="cat-dialog" id="catDialog">
+            <form method="dialog" id="catDialogForm">
+                <h3><span class="preview" id="catDlgPreview">🏷️</span> <span id="catDlgTitolo">Modifica categoria</span></h3>
+                <div class="field" id="catDlgNomeWrap">
+                    <label for="catDlgNome">Nome categoria</label>
+                    <input type="text" id="catDlgNome" maxlength="40" autocomplete="off">
+                </div>
+                <div>
+                    <label>Scegli un'icona</label>
+                    <div class="icon-grid" id="catDlgGriglia"></div>
+                </div>
+                <div class="dialog-sub">
+                    <div class="field emoji">
+                        <label for="catDlgEmoji">Altra emoji</label>
+                        <input type="text" id="catDlgEmoji" placeholder="🏷️" maxlength="8" autocomplete="off">
+                    </div>
+                    <p class="hint">Puoi anche incollare o digitare una qualsiasi emoji.</p>
+                </div>
+                <div class="actions">
+                    <button type="button" class="btn-ghost" id="catDlgAnnulla">Annulla</button>
+                    <button type="submit" id="catDlgSalva">Salva</button>
+                </div>
+            </form>
+        </dialog>
 
         <div class="card">
             <div class="card-head">
@@ -1080,52 +1179,110 @@
                 ]
             };
 
-            var CAT_STORAGE_KEY = "bilancio_categorie_custom_v1";
-            var categorieCustom = { entrata: [], spesa: [] };
+            var CAT_STORAGE_KEY_V1 = "bilancio_categorie_custom_v1";
+            var CAT_STORAGE_KEY = "bilancio_categorie_v2";
+            var TIPI_CAT = ["entrata", "spesa", "risparmio"];
+            var ICONA_DEFAULT = "🏷️";
+            var ICONE = [
+                "💼", "👴", "🎁", "↩️", "📈", "💱", "✨", "📌", "💰", "💵", "💶", "💳", "🪙", "🧾", "🏦", "🛟",
+                "🎯", "🐷", "🏠", "🔑", "🛋️", "🧹", "🔧", "💡", "🔥", "💧", "📶", "📱", "💻", "📺", "🛒", "🍎",
+                "🥖", "🍕", "☕", "🍷", "🍽️", "🚗", "⛽", "🚌", "🚆", "✈️", "🚲", "🅿️", "❤️", "💊", "🏥", "🦷",
+                "🏋️", "💇", "🧴", "🎉", "🎬", "🎮", "🎵", "📚", "🎨", "⚽", "🏖️", "🧳", "👕", "👟", "👶", "🎓",
+                "✏️", "🐶", "🐱", "🌱", "🎂", "💍", "🎄", "🛡️", "⚖️", "🏛️", "🧑‍💻", "🛠️", "📦", "🔁", "🙏", "🏷️"
+            ];
+            // Struttura: { entrata: [{ value, emoji, predefinita }], spesa: [...], risparmio: [...] }
+            var categorie = {};
 
+            function separaEmoji(label) {
+                var i = label.indexOf(" ");
+                return i > 0 ? { emoji: label.slice(0, i), nome: label.slice(i + 1) } : { emoji: "", nome: label };
+            }
+            function categoriePredefinite() {
+                var res = {};
+                TIPI_CAT.forEach(function (t) {
+                    res[t] = (CATEGORIE[t] || []).map(function (c) {
+                        return { value: c.value, emoji: separaEmoji(c.label).emoji || ICONA_DEFAULT, predefinita: true };
+                    });
+                });
+                return res;
+            }
             function caricaCategorieCustom() {
+                var obj = null;
                 try {
                     var raw = localStorage.getItem(CAT_STORAGE_KEY);
-                    var obj = raw ? JSON.parse(raw) : null;
-                    categorieCustom = { entrata: [], spesa: [] };
-                    if (obj && typeof obj === "object") {
+                    obj = raw ? JSON.parse(raw) : null;
+                } catch (e) { obj = null; }
+                if (obj && typeof obj === "object") {
+                    categorie = {};
+                    TIPI_CAT.forEach(function (t) {
+                        categorie[t] = Array.isArray(obj[t]) ? obj[t].filter(function (c) {
+                            return c && typeof c.value === "string" && c.value;
+                        }).map(function (c) {
+                            return { value: c.value, emoji: typeof c.emoji === "string" ? c.emoji : "", predefinita: !!c.predefinita };
+                        }) : [];
+                    });
+                    return;
+                }
+                // Prima apertura con la nuova versione: predefinite + eventuali personalizzate della v1
+                categorie = categoriePredefinite();
+                try {
+                    var rawV1 = localStorage.getItem(CAT_STORAGE_KEY_V1);
+                    var v1 = rawV1 ? JSON.parse(rawV1) : null;
+                    if (v1 && typeof v1 === "object") {
                         ["entrata", "spesa"].forEach(function (t) {
-                            if (Array.isArray(obj[t])) {
-                                categorieCustom[t] = obj[t].filter(function (c) { return c && typeof c.value === "string" && c.value; });
-                            }
+                            if (!Array.isArray(v1[t])) return;
+                            v1[t].forEach(function (c) {
+                                if (c && typeof c.value === "string" && c.value) {
+                                    categorie[t].push({ value: c.value, emoji: typeof c.emoji === "string" ? c.emoji : "", predefinita: false });
+                                }
+                            });
                         });
                     }
-                } catch (e) { categorieCustom = { entrata: [], spesa: [] }; }
+                } catch (e) { /* ignora */ }
+                salvaCategorieCustom();
             }
             function salvaCategorieCustom() {
-                try { localStorage.setItem(CAT_STORAGE_KEY, JSON.stringify(categorieCustom)); }
+                try { localStorage.setItem(CAT_STORAGE_KEY, JSON.stringify(categorie)); }
                 catch (e) { mostraToast("Impossibile salvare la categoria", true); }
             }
-            // Restituisce le categorie predefinite + quelle personalizzate (con label già sicura per HTML)
+            function iconaDi(c) { return c.emoji || ICONA_DEFAULT; }
+            // Restituisce le categorie del tipo (con label già sicura per HTML)
             function categorieDi(tipo) {
-                var base = (CATEGORIE[tipo] || []).map(function (c) {
-                    return { value: c.value, label: c.label, custom: false };
+                return (categorie[tipo] || []).map(function (c) {
+                    return {
+                        value: c.value, emoji: iconaDi(c), custom: !c.predefinita,
+                        label: escapeHtml(iconaDi(c) + " " + (c.predefinita ? separaEmoji(etichettaPredefinita(tipo, c.value)).nome : c.value))
+                    };
                 });
-                var extra = (categorieCustom[tipo] || []).map(function (c) {
-                    return { value: c.value, label: escapeHtml((c.emoji ? c.emoji + " " : "🏷️ ") + c.value), custom: true };
-                });
-                return base.concat(extra);
             }
+            // Le predefinite possono avere un'etichetta più corta del valore (es. "Altro (spese)" → "Altro")
+            function etichettaPredefinita(tipo, value) {
+                var trovata = (CATEGORIE[tipo] || []).filter(function (c) { return c.value === value; })[0];
+                return trovata ? trovata.label : "x " + value;
+            }
+            function trovaCategoria(tipo, nome) {
+                return (categorie[tipo] || []).filter(function (c) { return c.value === nome; })[0];
+            }
+            function iconaCategoria(tipo, nome) {
+                var c = trovaCategoria(tipo, nome);
+                return c ? iconaDi(c) : "";
+            }
+            function pulisciNome(v) { return v.trim().replace(/\s+/g, " "); }
+
+            var nuovaCatIcona = ICONA_DEFAULT;
 
             function aggiungiCategoria() {
                 var tipo = document.getElementById("nuovaCatTipo").value;
                 var nomeEl = document.getElementById("nuovaCatNome");
-                var emojiEl = document.getElementById("nuovaCatEmoji");
-                var nome = nomeEl.value.trim().replace(/\s+/g, " ");
-                var emoji = emojiEl.value.trim();
-                if (!categorieCustom[tipo]) return;
+                var nome = pulisciNome(nomeEl.value);
+                if (!categorie[tipo]) return;
                 if (!nome) { return mostraToast("Inserisci il nome della categoria", true); }
-                var esiste = categorieDi(tipo).some(function (c) { return c.value.toLowerCase() === nome.toLowerCase(); });
+                var esiste = categorie[tipo].some(function (c) { return c.value.toLowerCase() === nome.toLowerCase(); });
                 if (esiste) { return mostraToast("Categoria già esistente", true); }
-                categorieCustom[tipo].push({ value: nome, emoji: emoji });
+                categorie[tipo].push({ value: nome, emoji: nuovaCatIcona, predefinita: false });
                 salvaCategorieCustom();
                 nomeEl.value = "";
-                emojiEl.value = "";
+                impostaNuovaIcona(ICONA_DEFAULT);
                 if (document.getElementById("tipo").value === tipo) {
                     aggiornaCategorie();
                     document.getElementById("categoria").value = nome;
@@ -1133,15 +1290,20 @@
                 renderCategorie();
                 mostraToast("Categoria aggiunta ✓");
             }
+            function impostaNuovaIcona(e) {
+                nuovaCatIcona = e || ICONA_DEFAULT;
+                document.getElementById("nuovaCatIconaBtn").textContent = nuovaCatIcona;
+            }
 
             function eliminaCategoria(tipo, nome) {
-                if (!categorieCustom[tipo]) return;
+                var cat = trovaCategoria(tipo, nome);
+                if (!cat || cat.predefinita) return;
                 var usata = tuttiMovimenti.some(function (m) { return m.tipo === tipo && m.categoria === nome; });
                 var msg = usata
                     ? "La categoria \"" + nome + "\" è usata da alcuni movimenti, che resteranno invariati. Eliminarla dall'elenco?"
                     : "Eliminare la categoria \"" + nome + "\"?";
                 if (!confirm(msg)) return;
-                categorieCustom[tipo] = categorieCustom[tipo].filter(function (c) { return c.value !== nome; });
+                categorie[tipo] = categorie[tipo].filter(function (c) { return c.value !== nome; });
                 salvaCategorieCustom();
                 var sel = document.getElementById("categoria");
                 var selezionata = sel.value;
@@ -1149,6 +1311,76 @@
                 if (selezionata !== nome) sel.value = selezionata;
                 renderCategorie();
                 mostraToast("Categoria eliminata");
+            }
+
+            /* ---------- Dialog: modifica categoria / scelta icona ---------- */
+            var dlgStato = null; // { modo: "modifica" | "icona", tipo, nome, emoji }
+
+            function renderGrigliaIcone() {
+                var sel = dlgStato ? dlgStato.emoji : "";
+                document.getElementById("catDlgGriglia").innerHTML = ICONE.map(function (e) {
+                    return '<button type="button" data-emoji="' + escapeHtml(e) + '"' + (e === sel ? ' class="sel"' : '') +
+                        ' title="' + escapeHtml(e) + '">' + escapeHtml(e) + '</button>';
+                }).join("");
+            }
+            function aggiornaAnteprima() {
+                document.getElementById("catDlgPreview").textContent = dlgStato.emoji || ICONA_DEFAULT;
+            }
+            function apriDialog(stato) {
+                dlgStato = stato;
+                var modifica = stato.modo === "modifica";
+                document.getElementById("catDlgTitolo").textContent = modifica ? "Modifica categoria" : "Scegli icona";
+                document.getElementById("catDlgNomeWrap").style.display = modifica ? "" : "none";
+                document.getElementById("catDlgNome").value = modifica ? stato.nome : "";
+                document.getElementById("catDlgEmoji").value = ICONE.indexOf(stato.emoji) === -1 ? stato.emoji : "";
+                aggiornaAnteprima();
+                renderGrigliaIcone();
+                var dlg = document.getElementById("catDialog");
+                if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
+                (modifica ? document.getElementById("catDlgNome") : document.getElementById("catDlgGriglia").querySelector("button")).focus();
+            }
+            function chiudiDialog() {
+                var dlg = document.getElementById("catDialog");
+                if (typeof dlg.close === "function") dlg.close(); else dlg.removeAttribute("open");
+                dlgStato = null;
+            }
+            function salvaDialog() {
+                if (!dlgStato) return;
+                var emoji = dlgStato.emoji || ICONA_DEFAULT;
+                if (dlgStato.modo === "icona") {
+                    impostaNuovaIcona(emoji);
+                    chiudiDialog();
+                    return;
+                }
+                var tipo = dlgStato.tipo, vecchio = dlgStato.nome;
+                var cat = trovaCategoria(tipo, vecchio);
+                if (!cat) { chiudiDialog(); return; }
+                var nuovo = pulisciNome(document.getElementById("catDlgNome").value);
+                if (!nuovo) { return mostraToast("Inserisci il nome della categoria", true); }
+                var duplicata = categorie[tipo].some(function (c) {
+                    return c !== cat && c.value.toLowerCase() === nuovo.toLowerCase();
+                });
+                if (duplicata) { return mostraToast("Esiste già una categoria con questo nome", true); }
+
+                var sel = document.getElementById("categoria");
+                var selezionata = sel.value;
+                cat.emoji = emoji;
+                if (nuovo !== vecchio) {
+                    cat.value = nuovo;
+                    cat.predefinita = false; // rinominata: l'etichetta ora è quella scelta dall'utente
+                    var n = 0;
+                    tuttiMovimenti.forEach(function (m) {
+                        if (m.tipo === tipo && m.categoria === vecchio) { m.categoria = nuovo; n++; }
+                    });
+                    if (n) salva();
+                    if (document.getElementById("tipo").value === tipo && selezionata === vecchio) selezionata = nuovo;
+                }
+                salvaCategorieCustom();
+                aggiornaCategorie();
+                sel.value = selezionata;
+                chiudiDialog();
+                render();
+                mostraToast("Categoria aggiornata ✓");
             }
 
             var PAGAMENTI_LEGACY = { "Carta Credito": "Carta di Credito", "Carta debito": "Carta di Debito", "Paypal": "PayPal" };
@@ -1297,7 +1529,7 @@
                     return '<tr>' +
                         '<td>' + p[2] + '/' + p[1] + '/' + p[0] + '</td>' +
                         '<td class="' + classeTipo(m.tipo) + '">' + labelTipo(m.tipo).slice(0, 3) + '</td>' +
-                        '<td title="' + escapeHtml(m.descrizione || "") + '">' + escapeHtml(m.categoria) + '</td>' +
+                        '<td title="' + escapeHtml(m.descrizione || "") + '">' + escapeHtml((iconaCategoria(m.tipo, m.categoria) ? iconaCategoria(m.tipo, m.categoria) + " " : "") + m.categoria) + '</td>' +
                         '<td><span class="pay-badge">' + escapeHtml(m.pagamento || "—") + '</span></td>' +
                         '<td class="num ' + coloreTipo(m.tipo) + '">' + segnoTipo(m.tipo) + ' ' + fmt(m.importo) + '</td>' +
                         '<td style="text-align:right"><button class="btn-del" data-id="' + m.id + '">✕</button></td>' +
@@ -1346,15 +1578,20 @@
                     var righe = categorieDi(g.tipo).map(function (c) {
                         var v = tot[c.value] || 0;
                         delete tot[c.value];
-                        return { label: c.label, v: v, custom: c.custom, value: c.value };
+                        return { label: c.label, v: v, custom: c.custom, value: c.value, gestita: true };
                     });
                     Object.keys(tot).forEach(function (k) { righe.push({ label: escapeHtml(k), v: tot[k] }); });
                     return '<div class="cat-group ' + g.cls + '">' +
                         '<h3><span>' + g.titolo + '</span><span class="' + g.col + '">' + fmt(totale) + '</span></h3>' +
                         righe.map(function (r) {
-                            var del = r.custom
-                                ? '<button class="btn-del btn-del-cat" title="Elimina categoria" data-tipo="' + g.tipo + '" data-nome="' + escapeHtml(r.value) + '">✕</button>'
+                            var dati = ' data-tipo="' + g.tipo + '" data-nome="' + escapeHtml(r.value || "") + '"';
+                            var edit = r.gestita
+                                ? '<button class="btn-del btn-edit-cat" title="Modifica nome e icona"' + dati + '>✎</button>'
                                 : '';
+                            var del = r.custom
+                                ? '<button class="btn-del btn-del-cat" title="Elimina categoria"' + dati + '>✕</button>'
+                                : '';
+                            del = edit + del;
                             return '<div class="cat-row' + (r.v || r.custom ? '' : ' zero') + '"><span>' + r.label +
                                 (r.custom ? '<span class="cat-tag">mia</span>' : '') +
                                 '</span><span class="cat-actions"><span class="num">' + fmt(r.v) + '</span>' + del + '</span></div>';
@@ -1509,8 +1746,38 @@
             });
             document.getElementById("catGroups").addEventListener("click", function (ev) {
                 var btn = ev.target.closest(".btn-del-cat");
-                if (btn) eliminaCategoria(btn.getAttribute("data-tipo"), btn.getAttribute("data-nome"));
+                if (btn) return eliminaCategoria(btn.getAttribute("data-tipo"), btn.getAttribute("data-nome"));
+                var ed = ev.target.closest(".btn-edit-cat");
+                if (ed) {
+                    var tipo = ed.getAttribute("data-tipo"), nome = ed.getAttribute("data-nome");
+                    var cat = trovaCategoria(tipo, nome);
+                    if (cat) apriDialog({ modo: "modifica", tipo: tipo, nome: nome, emoji: iconaDi(cat) });
+                }
             });
+            document.getElementById("nuovaCatIconaBtn").addEventListener("click", function () {
+                apriDialog({ modo: "icona", emoji: nuovaCatIcona });
+            });
+            document.getElementById("catDlgGriglia").addEventListener("click", function (ev) {
+                var b = ev.target.closest("button[data-emoji]");
+                if (!b || !dlgStato) return;
+                dlgStato.emoji = b.getAttribute("data-emoji");
+                document.getElementById("catDlgEmoji").value = "";
+                aggiornaAnteprima();
+                renderGrigliaIcone();
+            });
+            document.getElementById("catDlgEmoji").addEventListener("input", function (ev) {
+                if (!dlgStato) return;
+                var v = ev.target.value.trim();
+                dlgStato.emoji = v || ICONA_DEFAULT;
+                aggiornaAnteprima();
+                renderGrigliaIcone();
+            });
+            document.getElementById("catDialogForm").addEventListener("submit", function (ev) {
+                ev.preventDefault();
+                salvaDialog();
+            });
+            document.getElementById("catDlgAnnulla").addEventListener("click", chiudiDialog);
+            document.getElementById("catDialog").addEventListener("close", function () { dlgStato = null; });
             document.getElementById("btnExport").addEventListener("click", esportaAnnoCorrente);
             document.getElementById("btnExportTutti").addEventListener("click", esportaTutti);
             document.getElementById("btnReset").addEventListener("click", azzeraAnno);

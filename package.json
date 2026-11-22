@@ -1,0 +1,8 @@
+{
+  "name": "bilancio-2026",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@netlify/database": "^2.0.3"
+  }
+}

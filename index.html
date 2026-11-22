@@ -158,6 +158,17 @@
             font-weight: 500;
         }
 
+        .sync-stato {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 12px; color: var(--muted); white-space: nowrap;
+        }
+        .sync-stato::before {
+            content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+        }
+        .sync-stato.in-corso::before { background: var(--gold); }
+        .sync-stato.offline::before { background: var(--terra); }
+        .topbar-dx { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-content: flex-end; }
+
         .year-picker {
             display: flex;
             align-items: center;
@@ -994,9 +1005,12 @@
                     <div class="sub">Gestione finanziaria · 2026–2046</div>
                 </div>
             </div>
+            <div class="topbar-dx">
+            <span id="syncStato" class="sync-stato in-corso" role="status" aria-live="polite">Connessione…</span>
             <div class="year-picker">
                 <label for="anno">Anno</label>
                 <select id="anno"></select>
+            </div>
             </div>
         </div>
 
@@ -1347,6 +1361,17 @@
                 });
                 return res;
             }
+            function normalizzaCategorie(obj) {
+                var res = {};
+                TIPI_CAT.forEach(function (t) {
+                    res[t] = Array.isArray(obj[t]) ? obj[t].filter(function (c) {
+                        return c && typeof c.value === "string" && c.value;
+                    }).map(function (c) {
+                        return { value: c.value, emoji: typeof c.emoji === "string" ? c.emoji : "", predefinita: !!c.predefinita };
+                    }) : [];
+                });
+                return res;
+            }
             function caricaCategorieCustom() {
                 var obj = null;
                 try {
@@ -1354,14 +1379,7 @@
                     obj = raw ? JSON.parse(raw) : null;
                 } catch (e) { obj = null; }
                 if (obj && typeof obj === "object") {
-                    categorie = {};
-                    TIPI_CAT.forEach(function (t) {
-                        categorie[t] = Array.isArray(obj[t]) ? obj[t].filter(function (c) {
-                            return c && typeof c.value === "string" && c.value;
-                        }).map(function (c) {
-                            return { value: c.value, emoji: typeof c.emoji === "string" ? c.emoji : "", predefinita: !!c.predefinita };
-                        }) : [];
-                    });
+                    categorie = normalizzaCategorie(obj);
                     return;
                 }
                 // Prima apertura con la nuova versione: predefinite + eventuali personalizzate della v1
@@ -1385,6 +1403,11 @@
             function salvaCategorieCustom() {
                 try { localStorage.setItem(CAT_STORAGE_KEY, JSON.stringify(categorie)); }
                 catch (e) { mostraToast("Impossibile salvare la categoria", true); }
+                if (avviato) {
+                    inAttesa.categorie = JSON.parse(JSON.stringify(categorie));
+                    salvaInAttesa();
+                    programmaInvio();
+                }
             }
             function iconaDi(c) { return c.emoji || ICONA_DEFAULT; }
             // Restituisce le categorie del tipo (con label già sicura per HTML)
@@ -1539,6 +1562,194 @@
             function salva() {
                 try { localStorage.setItem(STORAGE_KEY, JSON.stringify(tuttiMovimenti)); }
                 catch (e) { mostraToast("Impossibile salvare", true); }
+                if (avviato) {
+                    registraModifiche();
+                    programmaInvio();
+                }
+            }
+
+            /* ---------- Sincronizzazione con il database ---------- */
+            var SYNC_PENDING_KEY = "bilancio_sync_in_attesa_v1";
+            var SYNC_INIT_KEY = "bilancio_sync_inizializzato_v1";
+            var SYNC_INTERVALLO = 15000;
+            var avviato = false;         // true dopo il caricamento iniziale dal dispositivo
+            var syncPronto = false;      // diventa true dopo il primo allineamento col server
+            var syncVersione = null;     // versione dei dati sul server già applicata
+            var syncInCorso = false, syncRipeti = false, syncTimerInvio = null;
+            var istantanea = {};         // id -> JSON dell'ultimo stato noto (per calcolare le differenze)
+            var inAttesa = nuovaCoda();  // modifiche locali non ancora inviate
+
+            function nuovaCoda() { return { upsert: {}, elimina: {}, categorie: null }; }
+            function caricaInAttesa() {
+                try {
+                    var o = JSON.parse(localStorage.getItem(SYNC_PENDING_KEY) || "null");
+                    if (o && typeof o === "object") {
+                        inAttesa = { upsert: o.upsert || {}, elimina: o.elimina || {}, categorie: o.categorie || null };
+                    }
+                } catch (e) { inAttesa = nuovaCoda(); }
+            }
+            function salvaInAttesa() {
+                try { localStorage.setItem(SYNC_PENDING_KEY, JSON.stringify(inAttesa)); } catch (e) { /* ignora */ }
+            }
+            function codaVuota(q) {
+                return !Object.keys(q.upsert).length && !Object.keys(q.elimina).length && !q.categorie;
+            }
+            function aggiornaIstantanea() {
+                istantanea = {};
+                tuttiMovimenti.forEach(function (m) { istantanea[String(m.id)] = JSON.stringify(m); });
+            }
+            function registraModifiche() {
+                var visti = {};
+                tuttiMovimenti.forEach(function (m) {
+                    var id = String(m.id), j = JSON.stringify(m);
+                    visti[id] = true;
+                    if (istantanea[id] !== j) {
+                        inAttesa.upsert[id] = JSON.parse(j);
+                        delete inAttesa.elimina[id];
+                    }
+                });
+                Object.keys(istantanea).forEach(function (id) {
+                    if (!visti[id]) { inAttesa.elimina[id] = true; delete inAttesa.upsert[id]; }
+                });
+                aggiornaIstantanea();
+                salvaInAttesa();
+            }
+            function statoSync(classe, testo) {
+                var el = document.getElementById("syncStato");
+                el.className = "sync-stato" + (classe ? " " + classe : "");
+                el.textContent = testo;
+            }
+            function dialogAperto() {
+                return document.getElementById("movDialog").hasAttribute("open") ||
+                    document.getElementById("catDialog").hasAttribute("open");
+            }
+            // Unisce le categorie del dispositivo a quelle del server (solo al primo allineamento)
+            function unisciCategorie(server, locali) {
+                var res = normalizzaCategorie(server);
+                TIPI_CAT.forEach(function (t) {
+                    (locali[t] || []).forEach(function (c) {
+                        if (c.predefinita) return;
+                        var esiste = res[t].some(function (x) { return x.value.toLowerCase() === c.value.toLowerCase(); });
+                        if (!esiste) res[t].push({ value: c.value, emoji: c.emoji, predefinita: false });
+                    });
+                });
+                return res;
+            }
+            function applicaServer(stato) {
+                var primo = !localStorage.getItem(SYNC_INIT_KEY);
+                var serverMov = Array.isArray(stato.movimenti) ? stato.movimenti : [];
+                if (primo) {
+                    // Prima connessione di questo dispositivo: carica sul server i movimenti presenti solo qui
+                    var suServer = {};
+                    serverMov.forEach(function (m) { suServer[String(m.id)] = JSON.stringify(m); });
+                    tuttiMovimenti.forEach(function (m) {
+                        var id = String(m.id);
+                        if (suServer[id] !== JSON.stringify(m)) inAttesa.upsert[id] = m;
+                    });
+                    if (!inAttesa.categorie) {
+                        var unite = stato.categorie ? (haCategorieLocali ? unisciCategorie(stato.categorie, categorie) : normalizzaCategorie(stato.categorie)) : categorie;
+                        if (!stato.categorie || JSON.stringify(unite) !== JSON.stringify(normalizzaCategorie(stato.categorie))) {
+                            inAttesa.categorie = JSON.parse(JSON.stringify(unite));
+                        }
+                    }
+                }
+                var mappa = {}, ordine = [];
+                serverMov.forEach(function (m) {
+                    var id = String(m.id);
+                    if (inAttesa.elimina[id]) return;
+                    if (!mappa[id]) ordine.push(id);
+                    mappa[id] = m;
+                });
+                Object.keys(inAttesa.upsert).forEach(function (id) {
+                    if (!mappa[id]) ordine.push(id);
+                    mappa[id] = inAttesa.upsert[id];
+                });
+                var nuoviMov = ordine.map(function (id) { return mappa[id]; });
+                var nuoveCat = inAttesa.categorie ? normalizzaCategorie(inAttesa.categorie)
+                    : stato.categorie ? normalizzaCategorie(stato.categorie) : categorie;
+
+                var cambiato = JSON.stringify(nuoviMov) !== JSON.stringify(tuttiMovimenti) ||
+                    JSON.stringify(nuoveCat) !== JSON.stringify(categorie);
+                tuttiMovimenti = nuoviMov;
+                categorie = nuoveCat;
+                aggiornaIstantanea();
+                syncVersione = stato.versione;
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(tuttiMovimenti));
+                    localStorage.setItem(CAT_STORAGE_KEY, JSON.stringify(categorie));
+                    localStorage.setItem(SYNC_INIT_KEY, "1");
+                } catch (e) { /* ignora */ }
+                salvaInAttesa();
+                syncPronto = true;
+                if (cambiato) {
+                    var sel = document.getElementById("categoria");
+                    var selezionata = sel.value;
+                    aggiornaCategorie();
+                    sel.value = selezionata;
+                    render();
+                }
+            }
+            function programmaInvio() {
+                clearTimeout(syncTimerInvio);
+                syncTimerInvio = setTimeout(sincronizza, 300);
+            }
+            function richiesta(url, opzioni) {
+                return fetch(url, opzioni).then(function (r) {
+                    if (!r.ok) throw new Error("HTTP " + r.status);
+                    return r.json();
+                });
+            }
+            // Invia le modifiche in attesa e/o scarica gli aggiornamenti dagli altri dispositivi
+            function sincronizza() {
+                if (syncInCorso) { syncRipeti = true; return; }
+                // Non sovrascrivere i dati mentre l'utente sta modificando in un dialog
+                if (syncPronto && dialogAperto() && codaVuota(inAttesa)) return;
+                syncInCorso = true;
+                var invio = null, p;
+                if (!syncPronto) {
+                    statoSync("in-corso", "Sincronizzazione…");
+                    p = richiesta("/api/dati", { cache: "no-store" }).then(function (stato) {
+                        applicaServer(stato);
+                        if (!codaVuota(inAttesa)) syncRipeti = true;
+                    });
+                } else if (!codaVuota(inAttesa)) {
+                    invio = inAttesa;
+                    inAttesa = nuovaCoda();
+                    salvaInAttesa();
+                    statoSync("in-corso", "Salvataggio…");
+                    p = richiesta("/api/sync", {
+                        method: "POST",
+                        headers: { "content-type": "application/json" },
+                        body: JSON.stringify({
+                            upsert: Object.keys(invio.upsert).map(function (id) { return invio.upsert[id]; }),
+                            elimina: Object.keys(invio.elimina),
+                            categorie: invio.categorie
+                        })
+                    }).then(function (stato) { invio = null; applicaServer(stato); });
+                } else {
+                    p = richiesta("/api/dati?versione=" + encodeURIComponent(syncVersione || ""), { cache: "no-store" })
+                        .then(function (stato) { if (!stato.invariato) applicaServer(stato); });
+                }
+                p.then(function () {
+                    statoSync("", "Sincronizzato");
+                }, function () {
+                    if (invio) {
+                        // Rimetti in coda ciò che non è stato inviato (le modifiche più recenti hanno la precedenza)
+                        Object.keys(invio.upsert).forEach(function (id) {
+                            if (!inAttesa.upsert[id] && !inAttesa.elimina[id]) inAttesa.upsert[id] = invio.upsert[id];
+                        });
+                        Object.keys(invio.elimina).forEach(function (id) {
+                            if (!inAttesa.upsert[id]) inAttesa.elimina[id] = true;
+                        });
+                        if (!inAttesa.categorie) inAttesa.categorie = invio.categorie;
+                        salvaInAttesa();
+                    }
+                    statoSync("offline", codaVuota(inAttesa) ? "Offline" : "Offline · modifiche salvate sul dispositivo");
+                }).then(function () {
+                    syncInCorso = false;
+                    if (syncRipeti && navigator.onLine !== false) { syncRipeti = false; sincronizza(); }
+                    else syncRipeti = false;
+                });
             }
             function movimentiAnno(anno) {
                 return tuttiMovimenti.filter(function (m) {
@@ -1665,7 +1876,7 @@
                 movInModifica = null;
             }
             function salvaModificaMovimento() {
-                var m = movInModifica;
+                var m = movInModifica && tuttiMovimenti.filter(function (x) { return x.id === movInModifica.id; })[0];
                 if (!m) return;
                 var data = document.getElementById("movDlgData").value;
                 var importo = parseFloat(document.getElementById("movDlgImporto").value);
@@ -2159,8 +2370,11 @@
                 if (ev.key === "Enter") aggiungi();
             });
 
+            var haCategorieLocali = !!(localStorage.getItem(CAT_STORAGE_KEY) || localStorage.getItem(CAT_STORAGE_KEY_V1));
             carica();
             caricaCategorieCustom();
+            caricaInAttesa();
+            aggiornaIstantanea();
             aggiornaCategorie();
             var annoOggi = new Date().getFullYear();
             if (annoOggi >= ANNO_INIZIO && annoOggi <= ANNO_FINE) {
@@ -2170,6 +2384,15 @@
             }
             selAnno.value = annoCorrente;
             cambiaAnno(annoCorrente);
+
+            avviato = true;
+            sincronizza();
+            setInterval(function () { if (!document.hidden) sincronizza(); }, SYNC_INTERVALLO);
+            document.addEventListener("visibilitychange", function () { if (!document.hidden) sincronizza(); });
+            window.addEventListener("focus", sincronizza);
+            window.addEventListener("online", sincronizza);
+            document.getElementById("movDialog").addEventListener("close", function () { setTimeout(sincronizza, 0); });
+            document.getElementById("catDialog").addEventListener("close", function () { setTimeout(sincronizza, 0); });
         })();
     </script>
 </body>

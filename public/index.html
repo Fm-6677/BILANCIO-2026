@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#f6f1e7">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>Bilancio · 2026–2046</title>
@@ -972,25 +972,176 @@
                 font-size: 1.45rem
             }
 
-            th:nth-child(4),
-            td:nth-child(4) {
-                display: none
-            }
+        }
 
-            /* Movimenti: su mobile mostra la descrizione e nasconde il pagamento */
-            #tabMov th:nth-child(4),
-            #tabMov td:nth-child(4) {
-                display: table-cell
-            }
+        /* =========================================================
+           LAYOUT RESPONSIVE · dal desktop allo smartphone
+           ========================================================= */
+        html { -webkit-text-size-adjust: 100%; text-size-adjust: 100% }
+        body {
+            padding:
+                calc(clamp(20px, 5vw, 56px) + env(safe-area-inset-top))
+                calc(clamp(12px, 3vw, 28px) + env(safe-area-inset-right))
+                calc(clamp(36px, 6vw, 72px) + env(safe-area-inset-bottom))
+                calc(clamp(12px, 3vw, 28px) + env(safe-area-inset-left));
+        }
+        img, svg { max-width: 100% }
+        .container { width: 100%; max-width: 980px }
+        .card { padding: clamp(20px, 3.4vw, 36px) clamp(16px, 3.6vw, 38px); min-width: 0 }
+        .brand h1 { font-size: clamp(1.8rem, 1.2rem + 2.6vw, 2.8rem) }
+        .card h2 { font-size: clamp(1.25rem, 1.05rem + .9vw, 1.6rem) }
+        .stat .val { font-size: clamp(1.3rem, 1rem + 1.2vw, 1.8rem); overflow-wrap: anywhere }
 
-            #tabMov th:nth-child(5),
-            #tabMov td:nth-child(5) {
-                display: none
+        /* Schermi grandi: contenitore più ampio e report affiancati */
+        @media (min-width: 1240px) {
+            .container {
+                max-width: 1240px;
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                column-gap: 24px;
+                align-items: start;
             }
+            .container > * { grid-column: 1 / -1 }
+            .container > .card.half { grid-column: auto; align-self: stretch }
+        }
+        @media (min-width: 1600px) {
+            .container { max-width: 1440px }
+        }
 
-            #tabMov td.desc {
-                max-width: 120px
+        /* Strumenti nell'intestazione delle card */
+        .card-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap }
+        .card-tools select { width: auto; padding: 9px 36px 9px 14px; font-size: 14px; background-position: right 12px center }
+
+        /* Tabelle report: scorrimento orizzontale con prima colonna fissa */
+        .table-wrap { -webkit-overflow-scrolling: touch; max-width: 100% }
+        table.report { min-width: 520px }
+        table.report th:first-child,
+        table.report td:first-child {
+            position: sticky;
+            left: 0;
+            z-index: 1;
+            background: var(--surface);
+            white-space: nowrap;
+        }
+        table.report th:first-child { z-index: 3; background: var(--surface-2) }
+        table.report tr.tot-row td { font-weight: 600; border-top: 1px solid var(--green); background: var(--green-light) }
+        table.report tr.tot-row td:first-child { color: var(--text) }
+        table.report tr.zero td { opacity: .4 }
+        table.report tr.curr td { background: var(--green-light) }
+        table.report tr.curr td:first-child { box-shadow: inset 3px 0 0 var(--green) }
+
+        /* ============ REPORT METODI DI PAGAMENTO ============ */
+        .pay-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .pay-summary:empty { display: none }
+        .pay-card {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 14px 16px 12px;
+            min-width: 0;
+        }
+        .pay-card .pc-head {
+            display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+            font-size: .82rem; color: var(--text-2);
+        }
+        .pay-card .pc-head span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+        .pay-card .pc-n { font-size: .7rem; color: var(--muted); white-space: nowrap }
+        .pay-card .pc-val {
+            font-family: var(--font-display);
+            font-size: 1.4rem;
+            font-weight: 500;
+            line-height: 1.2;
+            margin-top: 4px;
+            font-variant-numeric: lining-nums tabular-nums;
+        }
+        .pay-card .pc-sub { font-size: .72rem; color: var(--muted); margin-top: 2px }
+        .pay-card .pc-bar { background: var(--surface-3); height: 4px; border-radius: 2px; overflow: hidden; margin-top: 10px }
+        .pay-card .pc-bar i { display: block; height: 100%; background: var(--terra); border-radius: 2px; transition: width .8s var(--ease) }
+
+        /* Tablet */
+        @media (max-width: 900px) {
+            .toolbar { justify-content: flex-start }
+        }
+
+        /* Smartphone */
+        @media (max-width: 640px) {
+            /* 16px evita lo zoom automatico di iOS sui campi */
+            input, select, .filtri input, .filtri select, .card-tools select { font-size: 16px }
+            .row { gap: 12px }
+            .field { min-width: min(100%, 140px) }
+            .cat-add .field.nome, .cat-add .btn-add-cat { flex: 1 1 100%; min-width: 0 }
+            .topbar { align-items: flex-start }
+            .topbar-dx { width: 100%; justify-content: space-between }
+            .card-head { margin-bottom: 18px }
+            .card-tools { width: 100% }
+            .card-tools select { flex: 1; min-width: 0 }
+            .toolbar .btn-sm { flex: 1 1 auto }
+            .summary { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+            .summary .stat:last-child:nth-child(odd) { grid-column: 1 / -1 }
+            .stat { padding: 16px 14px }
+            .legend { gap: 14px 20px; margin-bottom: 16px }
+            .toast { max-width: calc(100vw - 32px); text-align: center; bottom: calc(20px + env(safe-area-inset-bottom)) }
+            .cat-dialog { max-height: calc(100dvh - 32px); overflow-y: auto }
+            .cat-dialog form { padding: 20px 16px }
+            .cat-dialog .actions button { flex: 1 }
+
+            /* Movimenti: ogni riga diventa una scheda compatta */
+            #tabMov thead { display: none }
+            #tabMov, #tabMov tbody, #tabMov tfoot { display: block; width: 100% }
+            #tabMov tbody tr {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 4px 10px;
+                padding: 12px 14px;
+                border-bottom: 1px solid var(--border);
             }
+            #tabMov tbody tr:last-child { border-bottom: none }
+            #tabMov tbody td { border: none; padding: 0; font-size: .82rem }
+            #tabMov td.c-cat { order: 1; flex: 1 1 0; min-width: 0; color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+            #tabMov td.num { order: 2; font-size: .95rem }
+            #tabMov td.c-data { order: 3; color: var(--muted); font-size: .75rem }
+            #tabMov td.c-tipo { order: 4; font-size: .75rem }
+            #tabMov td.c-pag { order: 5 }
+            #tabMov td.mov-actions { order: 6; margin-left: auto }
+            #tabMov td.desc { order: 7; flex: 1 1 100%; max-width: none; white-space: normal; font-size: .78rem }
+            #tabMov td.desc-empty { display: none }
+            #tabMov tbody td.empty { flex: 1 1 100%; padding: 32px 10px }
+            #tabMov tfoot tr { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; background: var(--surface-2) }
+            #tabMov tfoot td { padding: 10px 14px; border-top: none }
+            #tabMov tfoot tr:first-child { border-top: 2px solid var(--border) }
+            #tabMov tfoot tr.tot-saldo { border-top: 1px solid var(--border) }
+            #tabMov tfoot td.tot-label { text-align: left }
+            #tabMov tfoot td:empty { display: none }
+
+            table.report { min-width: 480px }
+        }
+
+        @media (max-width: 420px) {
+            .filtri { grid-template-columns: 1fr }
+            .brand { gap: 12px }
+            .brand-mark { width: 42px; height: 42px }
+            .pay-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px }
+            .pay-card { padding: 12px }
+            .pay-card .pc-val { font-size: 1.15rem }
+        }
+
+        /* Dispositivi touch: aree di tocco più ampie */
+        @media (pointer: coarse) {
+            .btn-del { width: 38px; height: 38px }
+            .cat-row .btn-del { width: 32px; height: 32px }
+        }
+
+        @media print {
+            body { background: #fff; padding: 0 }
+            .card { box-shadow: none; break-inside: avoid; animation: none }
+            .toolbar, .filtri, .card-tools, .cat-add, .mov-actions, .toast, #btnResetFiltri { display: none !important }
+            table.report { min-width: 0 }
         }
     </style>
 </head>
@@ -1232,7 +1383,7 @@
             </div>
         </div>
 
-        <div class="card">
+        <div class="card half">
             <div class="card-head">
                 <h2><span class="ico">📈</span> Confronto mensile <span class="badge-year" id="annoGrafico"></span></h2>
             </div>
@@ -1244,12 +1395,12 @@
             <div id="reportMensile"></div>
         </div>
 
-        <div class="card">
+        <div class="card half">
             <div class="card-head">
                 <h2><span class="ico">🧾</span> Report mensile <span class="badge-year" id="annoReport"></span></h2>
             </div>
             <div class="table-wrap">
-                <table>
+                <table class="report">
                     <thead>
                         <tr>
                             <th>Mese</th>
@@ -1267,10 +1418,37 @@
 
         <div class="card">
             <div class="card-head">
+                <h2><span class="ico">💳</span> Metodi di pagamento <span class="badge-year" id="annoPagamenti"></span></h2>
+                <div class="card-tools">
+                    <select id="periodoPagamenti" aria-label="Periodo del report metodi di pagamento"></select>
+                    <button class="btn-ghost btn-sm" id="btnExportPagamenti">⬇ CSV</button>
+                </div>
+            </div>
+            <div class="pay-summary" id="pagamentiSintesi"></div>
+            <div class="table-wrap">
+                <table class="report">
+                    <thead>
+                        <tr>
+                            <th>Metodo</th>
+                            <th style="text-align:right">N°</th>
+                            <th style="text-align:right">Entrate</th>
+                            <th style="text-align:right">Spese</th>
+                            <th style="text-align:right">Risparmi</th>
+                            <th style="text-align:right">Saldo</th>
+                            <th style="text-align:right">% spese</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bodyPagamenti"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-head">
                 <h2><span class="ico">📆</span> Confronto tra anni</h2>
             </div>
             <div class="table-wrap">
-                <table>
+                <table class="report">
                     <thead>
                         <tr>
                             <th>Anno</th>
@@ -1919,6 +2097,7 @@
                 renderCategorie();
                 renderGrafico();
                 renderTabellaMesi();
+                renderPagamenti();
                 renderConfrontoAnni();
             }
 
@@ -2077,13 +2256,13 @@
                 body.innerHTML = ord.map(function (m) {
                     var p = m.data.split("-");
                     return '<tr>' +
-                        '<td>' + p[2] + '/' + p[1] + '/' + p[0] + '</td>' +
-                        '<td class="' + classeTipo(m.tipo) + '">' + labelTipo(m.tipo).slice(0, 3) + '</td>' +
-                        '<td>' + escapeHtml((iconaCategoria(m.tipo, m.categoria) ? iconaCategoria(m.tipo, m.categoria) + " " : "") + m.categoria) + '</td>' +
+                        '<td class="c-data">' + p[2] + '/' + p[1] + '/' + p[0] + '</td>' +
+                        '<td class="c-tipo ' + classeTipo(m.tipo) + '">' + labelTipo(m.tipo).slice(0, 3) + '</td>' +
+                        '<td class="c-cat">' + escapeHtml((iconaCategoria(m.tipo, m.categoria) ? iconaCategoria(m.tipo, m.categoria) + " " : "") + m.categoria) + '</td>' +
                         (m.descrizione
                             ? '<td class="desc" title="' + escapeHtml(m.descrizione) + '">' + escapeHtml(m.descrizione) + '</td>'
                             : '<td class="desc desc-empty">—</td>') +
-                        '<td><span class="pay-badge">' + escapeHtml(m.pagamento || "—") + '</span></td>' +
+                        '<td class="c-pag"><span class="pay-badge">' + escapeHtml(m.pagamento || "—") + '</span></td>' +
                         '<td class="num ' + coloreTipo(m.tipo) + '">' + segnoTipo(m.tipo) + ' ' + fmt(m.importo) + '</td>' +
                         '<td class="mov-actions">' +
                         '<button class="btn-del btn-edit-mov" data-id="' + m.id + '" title="Modifica data, importo, pagamento e descrizione" aria-label="Modifica movimento">✎</button>' +
@@ -2197,7 +2376,7 @@
                     var perc = m.e > 0 ? (m.r / m.e) * 100 : 0;
                     te += m.e; ts += m.s; tr += m.r;
                     if (m.e === 0 && m.s === 0 && m.r === 0) {
-                        return '<tr style="opacity:.35"><td>' + MESI[i] + '</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>';
+                        return '<tr class="zero"><td>' + MESI[i] + '</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>';
                     }
                     return '<tr>' +
                         '<td>' + MESI[i] + '</td>' +
@@ -2208,8 +2387,8 @@
                         '<td class="num" style="color:var(--muted)">' + (m.e > 0 ? fmtPerc(perc) : "—") + '</td>' +
                         '</tr>';
                 }).join("");
-                html += '<tr style="font-weight:600; border-top:1px solid var(--green); background:var(--green-light)">' +
-                    '<td style="color:var(--text)">TOT ' + annoCorrente + '</td>' +
+                html += '<tr class="tot-row">' +
+                    '<td>TOT ' + annoCorrente + '</td>' +
                     '<td class="num pos">' + fmt(te) + '</td>' +
                     '<td class="num neg">' + fmt(ts) + '</td>' +
                     '<td class="num sav">' + fmt(tr) + '</td>' +
@@ -2217,6 +2396,128 @@
                     '<td class="num" style="color:var(--muted)">' + (te > 0 ? fmtPerc((tr / te) * 100) : "—") + '</td>' +
                     '</tr>';
                 document.getElementById("bodyMesi").innerHTML = html;
+            }
+
+            // ===== Report metodi di pagamento =====
+            var periodoPagamenti = "";
+
+            function etichettaPagamento(valore) {
+                var o = Array.prototype.find.call(document.getElementById("pagamento").options, function (o) { return o.value === valore; });
+                return o ? o.textContent : valore;
+            }
+
+            function aggiornaPeriodiPagamenti(lista) {
+                var conteggio = {};
+                lista.forEach(function (m) { var k = m.data.slice(5, 7); conteggio[k] = (conteggio[k] || 0) + 1; });
+                var html = '<option value="">Tutto il ' + annoCorrente + '</option>' + MESI_ESTESI.map(function (nome, i) {
+                    var k = String(i + 1).padStart(2, "0");
+                    return '<option value="' + k + '">' + nome + (conteggio[k] ? " (" + conteggio[k] + ")" : "") + '</option>';
+                }).join("");
+                periodoPagamenti = impostaOpzioni(document.getElementById("periodoPagamenti"), html, periodoPagamenti);
+            }
+
+            function calcolaPagamenti(lista) {
+                var righe = [], indice = {};
+                function riga(valore) {
+                    if (!indice.hasOwnProperty(valore)) {
+                        indice[valore] = righe.length;
+                        righe.push({
+                            valore: valore,
+                            label: valore === "" ? "— Non indicato" : etichettaPagamento(valore),
+                            n: 0, e: 0, s: 0, r: 0
+                        });
+                    }
+                    return righe[indice[valore]];
+                }
+                Array.prototype.forEach.call(document.getElementById("pagamento").options, function (o) {
+                    if (o.value) riga(o.value);
+                });
+                lista.forEach(function (m) {
+                    var x = riga(m.pagamento || "");
+                    x.n++;
+                    if (m.tipo === "entrata") x.e += m.importo;
+                    else if (m.tipo === "spesa") x.s += m.importo;
+                    else x.r += m.importo;
+                });
+                return righe;
+            }
+
+            function movimentiPeriodoPagamenti() {
+                return movimentiAnno(annoCorrente).filter(function (m) {
+                    return !periodoPagamenti || m.data.slice(5, 7) === periodoPagamenti;
+                });
+            }
+
+            function renderPagamenti() {
+                document.getElementById("annoPagamenti").textContent = annoCorrente;
+                aggiornaPeriodiPagamenti(movimentiAnno(annoCorrente));
+                var lista = movimentiPeriodoPagamenti();
+                var righe = calcolaPagamenti(lista);
+                var tot = { n: 0, e: 0, s: 0, r: 0 };
+                righe.forEach(function (x) { tot.n += x.n; tot.e += x.e; tot.s += x.s; tot.r += x.r; });
+                var body = document.getElementById("bodyPagamenti");
+                var sintesi = document.getElementById("pagamentiSintesi");
+                var periodo = periodoPagamenti ? MESI_ESTESI[parseInt(periodoPagamenti, 10) - 1] + " " + annoCorrente : String(annoCorrente);
+
+                if (!lista.length) {
+                    sintesi.innerHTML = "";
+                    body.innerHTML = '<tr><td colspan="7" class="empty">Nessun movimento · ' + periodo + '</td></tr>';
+                    return;
+                }
+
+                // Schede: uscite (spese + risparmi) per metodo, ordinate per importo
+                var usciteTot = tot.s + tot.r;
+                sintesi.innerHTML = righe.filter(function (x) { return x.n > 0; })
+                    .sort(function (a, b) { return (b.s + b.r) - (a.s + a.r) || b.e - a.e; })
+                    .map(function (x) {
+                        var uscite = x.s + x.r;
+                        var quota = usciteTot > 0 ? (uscite / usciteTot) * 100 : 0;
+                        return '<div class="pay-card">' +
+                            '<div class="pc-head"><span>' + escapeHtml(x.label) + '</span><span class="pc-n">' + x.n + " mov." + '</span></div>' +
+                            '<div class="pc-val neg">' + fmt(uscite) + '</div>' +
+                            '<div class="pc-sub">Uscite · ' + fmtPerc(quota) + (x.e ? ' · Entrate <span class="pos">' + fmt(x.e) + '</span>' : '') + '</div>' +
+                            '<div class="pc-bar" aria-hidden="true"><i style="width:' + quota + '%"></i></div>' +
+                            '</div>';
+                    }).join("");
+
+                var html = righe.map(function (x) {
+                    if (!x.n) {
+                        return '<tr class="zero"><td>' + escapeHtml(x.label) + '</td><td class="num">0</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>';
+                    }
+                    var saldo = x.e - x.s - x.r;
+                    return '<tr>' +
+                        '<td>' + escapeHtml(x.label) + '</td>' +
+                        '<td class="num" style="color:var(--muted)">' + x.n + '</td>' +
+                        '<td class="num pos">' + fmt(x.e) + '</td>' +
+                        '<td class="num neg">' + fmt(x.s) + '</td>' +
+                        '<td class="num sav">' + fmt(x.r) + '</td>' +
+                        '<td class="num ' + (saldo >= 0 ? 'pos' : 'neg') + '">' + fmt(saldo) + '</td>' +
+                        '<td class="num" style="color:var(--muted)">' + (tot.s > 0 ? fmtPerc((x.s / tot.s) * 100) : "—") + '</td>' +
+                        '</tr>';
+                }).join("");
+                var saldoTot = tot.e - tot.s - tot.r;
+                html += '<tr class="tot-row">' +
+                    '<td>TOT ' + periodo + '</td>' +
+                    '<td class="num">' + tot.n + '</td>' +
+                    '<td class="num pos">' + fmt(tot.e) + '</td>' +
+                    '<td class="num neg">' + fmt(tot.s) + '</td>' +
+                    '<td class="num sav">' + fmt(tot.r) + '</td>' +
+                    '<td class="num ' + (saldoTot >= 0 ? 'pos' : 'neg') + '">' + fmt(saldoTot) + '</td>' +
+                    '<td class="num" style="color:var(--muted)">' + (tot.s > 0 ? "100%" : "—") + '</td>' +
+                    '</tr>';
+                body.innerHTML = html;
+            }
+
+            function esportaPagamenti() {
+                var lista = movimentiPeriodoPagamenti();
+                if (!lista.length) return mostraToast("Nessun movimento nel periodo selezionato", true);
+                var righe = [["Metodo pagamento", "Movimenti", "Entrate", "Spese", "Risparmi", "Saldo"]];
+                calcolaPagamenti(lista).forEach(function (x) {
+                    righe.push([x.valore || "Non indicato", x.n, x.e.toFixed(2), x.s.toFixed(2), x.r.toFixed(2), (x.e - x.s - x.r).toFixed(2)]);
+                });
+                var suffisso = periodoPagamenti ? annoCorrente + "_" + periodoPagamenti : String(annoCorrente);
+                scaricaCSV(righe, "pagamenti_" + suffisso + ".csv");
+                mostraToast("Report pagamenti scaricato");
             }
 
             function renderConfrontoAnni() {
@@ -2245,7 +2546,7 @@
                     });
                     var saldo = e - s - r;
                     var perc = e > 0 ? (r / e) * 100 : 0;
-                    var ev = (a === annoCorrente) ? ' style="background:var(--green-light); border-left:3px solid var(--green)"' : '';
+                    var ev = (a === annoCorrente) ? ' class="curr"' : '';
                     return '<tr' + ev + '>' +
                         '<td><strong style="color:var(--text)">' + a + '</strong></td>' +
                         '<td class="num pos">' + fmt(e) + '</td>' +
@@ -2348,6 +2649,11 @@
             document.getElementById("btnExport").addEventListener("click", esportaAnnoCorrente);
             document.getElementById("btnExportTutti").addEventListener("click", esportaTutti);
             document.getElementById("btnReset").addEventListener("click", azzeraAnno);
+            document.getElementById("btnExportPagamenti").addEventListener("click", esportaPagamenti);
+            document.getElementById("periodoPagamenti").addEventListener("change", function (ev) {
+                periodoPagamenti = ev.target.value;
+                renderPagamenti();
+            });
             document.getElementById("filtroTesto").addEventListener("input", function (ev) {
                 filtri.testo = ev.target.value.trim();
                 renderTabella();

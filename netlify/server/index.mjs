@@ -2,6 +2,15 @@ import { getDatabase } from "@netlify/database";
 
 const db = getDatabase();
 const MAX_BATCH = 5000;
+const MAX_REPORT = 100;
+
+function reportValido(r) {
+  return r && typeof r === "object" && !Array.isArray(r) && idValido(r.id) &&
+    typeof r.fonte === "string" && r.fonte.length <= 40 &&
+    typeof r.tipo === "string" && r.tipo.length <= 40 &&
+    (r.titolo === undefined || (typeof r.titolo === "string" && r.titolo.length <= 120)) &&
+    (r.mese === undefined || (typeof r.mese === "string" && r.mese.length <= 2));
+}
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -28,11 +37,13 @@ async function versione() {
 
 async function statoCompleto() {
   const righe = await db.sql`SELECT dati FROM movimenti ORDER BY CASE WHEN id ~ '^[0-9]+([.][0-9]+)?$' THEN id::numeric END, id`;
-  const [cat] = await db.sql`SELECT valore FROM impostazioni WHERE chiave = 'categorie'`;
+  const imp = await db.sql`SELECT chiave, valore FROM impostazioni WHERE chiave IN ('categorie', 'report')`;
+  const val = (k) => { const r = imp.find((x) => x.chiave === k); return r ? r.valore : null; };
   return {
     versione: await versione(),
     movimenti: righe.map((r) => r.dati),
-    categorie: cat ? cat.valore : null,
+    categorie: val("categorie"),
+    report: val("report"),
   };
 }
 
@@ -43,6 +54,8 @@ async function sync(req) {
   const elimina = Array.isArray(body?.elimina) ? body.elimina : [];
   if (upsert.length > MAX_BATCH || elimina.length > MAX_BATCH) return json({ errore: "Troppi elementi" }, 413);
   if (!upsert.every(movimentoValido) || !elimina.every(idValido)) return json({ errore: "Dati non validi" }, 400);
+  const report = Array.isArray(body?.report) ? body.report : null;
+  if (report && (report.length > MAX_REPORT || !report.every(reportValido))) return json({ errore: "Report non validi" }, 400);
   const categorie = body?.categorie && typeof body.categorie === "object" && !Array.isArray(body.categorie) ? body.categorie : null;
 
   const client = await db.pool.connect();
@@ -63,6 +76,13 @@ async function sync(req) {
         `INSERT INTO impostazioni (chiave, valore, updated_at) VALUES ('categorie', $1::jsonb, now())
          ON CONFLICT (chiave) DO UPDATE SET valore = EXCLUDED.valore, updated_at = now()`,
         [JSON.stringify(categorie)]
+      );
+    }
+    if (report) {
+      await client.query(
+        `INSERT INTO impostazioni (chiave, valore, updated_at) VALUES ('report', $1::jsonb, now())
+         ON CONFLICT (chiave) DO UPDATE SET valore = EXCLUDED.valore, updated_at = now()`,
+        [JSON.stringify(report)]
       );
     }
     await client.query("COMMIT");
